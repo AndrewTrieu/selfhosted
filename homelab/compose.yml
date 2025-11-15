@@ -1,0 +1,55 @@
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: always
+    volumes:
+      - ./vaultwarden:/data
+    environment:
+      DOMAIN: "https://vault.example.com" # Change to yours
+
+  2fauth:
+    image: 2fauth/2fauth:latest
+    container_name: 2fauth
+    restart: always
+    volumes:
+      - ./2fauth:/data
+    environment:
+      - APP_NAME=2FAuth
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_TIMEZONE=Europe/Helsinki
+      - SITE_OWNER=admin@example.com # Change to yours
+      - APP_KEY=SomeRandomStringOf32CharsExactly # Change to yours
+      - APP_URL=https://auth.example.com # Change to yours
+      - ASSET_URL=https://auth.example.com # Change to yours
+      - TRUSTED_PROXIES=*
+      - LOG_CHANNEL=daily
+      - LOG_LEVEL=notice
+    networks:
+      - default
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ./caddy:/usr/bin/caddy 
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-config:/config
+      - ./caddy-data:/data
+    environment:
+      # For Caddy: hostnames only, no https://
+      VAULT_DOMAIN: "vault.example.com" # Change to yours
+      AUTH_DOMAIN:  "auth.example.com" # Change to yours
+      EMAIL: "admin@example.com" # Change to yours
+      DUCKDNS_TOKEN: "TOKEN" # Change to yours
+      LOG_FILE: "/data/access.log"
+
+networks:
+  default:
+    driver: bridge
