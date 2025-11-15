@@ -1,19 +1,25 @@
 services:
+  # ==========================
+  # Vaultwarden (Password manager)
+  # ==========================
   vaultwarden:
     image: vaultwarden/server:latest
     container_name: vaultwarden
     restart: always
     volumes:
-      - ./vaultwarden:/data
+      - ./services/vaultwarden:/data
     environment:
       DOMAIN: "https://vault.example.com" # Change to yours
 
+  # ==========================
+  # 2FAuth (2FA manager)
+  # ==========================
   2fauth:
     image: 2fauth/2fauth:latest
     container_name: 2fauth
     restart: always
     volumes:
-      - ./2fauth:/data
+      - ./services/2fauth:/data
     environment:
       - APP_NAME=2FAuth
       - APP_ENV=production
@@ -29,6 +35,9 @@ services:
     networks:
       - default
 
+  # ==========================
+  # Caddy (Reverse proxy)
+  # ==========================
   caddy:
     image: caddy:2
     container_name: caddy
@@ -50,6 +59,65 @@ services:
       DUCKDNS_TOKEN: "TOKEN" # Change to yours
       LOG_FILE: "/data/access.log"
 
+  # ==========================
+  # Portainer (Docker manager)
+  # ==========================
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: always
+    ports:
+      - 9443:9443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./services/portainer:/data
+
+  # ==========================
+  # Uptime Kuma (uptime monitor)
+  # ==========================
+  uptimekuma:
+    image: louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    restart: always
+    ports:
+      - 3001:3001
+    volumes:
+      - ./services/uptimekuma:/app/data
+
+  # ==========================
+  # Dozzle (live logs viewer)
+  # ==========================
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: always
+    ports:
+      - 9999:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # ==========================
+  # Netdata (system monitoring)
+  # ==========================
+  netdata:
+    image: netdata/netdata:latest
+    container_name: netdata
+    restart: always
+    ports:
+      - 19999:19999
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ./services/netdata/config:/etc/netdata
+      - ./services/netdata/lib:/var/lib/netdata
+      - ./services/netdata/cache:/var/cache/netdata
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+
 networks:
   default:
     driver: bridge
+

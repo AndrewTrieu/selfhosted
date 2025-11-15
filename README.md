@@ -1,11 +1,17 @@
-# Homelab Setup (Vaultwarden + 2FAuth + Caddy + DuckDNS)
+# Homelab Setup
 
 This repository contains the configuration for my personal homelab stack, including:
 
-- **Vaultwarden** – self-hosted password manager (Bitwarden-compatible)
-- **2FAuth** – self-hosted two-factor authentication manager
-- **Caddy** – reverse proxy with automatic HTTPS via DuckDNS (DNS-01)
-- **DuckDNS Updater** – updates my dynamic IP address automatically
+| Service | Description | Access URL |
+|---------|-------------|------------|
+| **Vaultwarden** | Self-hosted password manager (Bitwarden-compatible) | `https://vault.example.com` |
+| **2FAuth** | Self-hosted two-factor authentication manager | `https://auth.example.com` |
+| **Caddy** | Reverse proxy with automatic HTTPS via DuckDNS (DNS-01) | *No direct UI* |
+| **Portainer** | Makes Docker life 100x easier (visual container manager) | `https://<SERVER_IP>:9443` |
+| **Uptime Kuma** | Monitors homelab/domain uptime | `http://<SERVER_IP>:3001` |
+| **Dozzle** | Displays logs super easily (real-time Docker logs) | `http://<SERVER_IP>:9999` |
+| **Netdata** | Beautiful system and container monitoring | `http://<SERVER_IP>:19999` |
+| **DuckDNS Updater** | Updates current dynamic IP address automatically | Runs from `./duckdns/duck.sh` |
 
 The setup is built with Docker Compose and is designed to be simple, secure, and easy to maintain.
 
@@ -18,7 +24,7 @@ The setup is built with Docker Compose and is designed to be simple, secure, and
 │   └── duck.sh         # DuckDNS update script (runs via cron)
 └── homelab
     ├── Caddyfile       # Reverse proxy configuration for Caddy
-    └── compose.yml     # Docker Compose stack for Vaultwarden + 2FAuth + Caddy
+    └── compose.yml     # Docker Compose stack for all services
 ```
 
 ## Secrets and Environment Variables
@@ -71,6 +77,15 @@ The **homelab/** folder contains:
 
 ```bash
 cd homelab
+mkdir -p services/vaultwarden \
+         services/2fauth \
+         services/uptimekuma \
+         services/portainer \
+         services/caddy/config \
+         services/caddy/data \
+         services/netdata/config \
+         services/netdata/lib \
+         services/netdata/cache
 docker compose up -d
 ```
 
@@ -108,18 +123,16 @@ sudo systemctl enable docker
 Run:
 
 ```bash
-sudo chown -R 1000:1000 homelab/vaultwarden
-sudo chmod -R 755 homelab/vaultwarden
-
-sudo chown -R 1000:1000 homelab/2fauth
-sudo chmod -R 755 homelab/2fauth
+cd homelab
+sudo chown -R 1000:1000 services
+sudo chmod -R 755 services
 ```
 
 Then restart the containers:
 
 ```bash
 cd homelab
-docker compose restart vaultwarden 2fauth
+docker compose restart vaultwarden 2fauth portainer dozzle uptime-kuma netdata
 ```
 
 ## Updating
