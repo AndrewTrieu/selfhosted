@@ -2,7 +2,7 @@
 
 # === CONFIGURATION ===
 TOKEN="TOKEN"
-DOMAINS=("auth" "vault")
+DOMAINS=("auth" "vault" "storage")
 LOG_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="$LOG_DIR/duck.log"
 

@@ -36,6 +36,21 @@ services:
       - default
 
   # ==========================
+  # Nextcloud (Personal cloud / NAS)
+  # ==========================
+  nextcloud:
+    image: nextcloud:latest
+    container_name: nextcloud
+    restart: always
+    volumes:
+      - ./services/nextcloud:/var/www/html
+    environment:
+      - NEXTCLOUD_ADMIN_USER=admin         # Change to yours
+      - NEXTCLOUD_ADMIN_PASSWORD=changeme  # Change to a strong password
+    networks:
+      - default
+
+  # ==========================
   # Caddy (Reverse proxy)
   # ==========================
   caddy:
@@ -55,6 +70,7 @@ services:
       # For Caddy: hostnames only, no https://
       VAULT_DOMAIN: "vault.example.com" # Change to yours
       AUTH_DOMAIN:  "auth.example.com" # Change to yours
+      STORAGE_DOMAIN: "storage.example.com" # Change to yours
       EMAIL: "admin@example.com" # Change to yours
       DUCKDNS_TOKEN: "TOKEN" # Change to yours
       LOG_FILE: "/data/access.log"
