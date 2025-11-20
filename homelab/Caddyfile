@@ -1,18 +1,21 @@
 # ===========================
+# DuckDNS
+# ===========================
+(dns_duck) {
+    tls {
+        dns duckdns {env.DUCKDNS_TOKEN}
+    }
+    log {
+        output file {env.LOG_FILE}
+        format console
+    }
+}
+
+# ===========================
 # Vaultwarden
 # ===========================
 {$VAULT_DOMAIN} {
-    log {
-        level INFO
-        output file {$LOG_FILE} {
-            roll_size 10MB
-            roll_keep 10
-        }
-    }
-
-    tls {
-        dns duckdns {$DUCKDNS_TOKEN}
-    }
+    import dns_duck
 
     encode zstd gzip
 
@@ -23,17 +26,7 @@
 # 2FAuth
 # ===========================
 {$AUTH_DOMAIN} {
-    log {
-        level INFO
-        output file {$LOG_FILE} {
-            roll_size 10MB
-            roll_keep 10
-        }
-    }
-
-    tls {
-        dns duckdns {$DUCKDNS_TOKEN}
-    }
+    import dns_duck
 
     encode zstd gzip
 
@@ -44,20 +37,9 @@
 # Nextcloud
 # ===========================
 {$STORAGE_DOMAIN} {
-    log {
-        level INFO
-        output file {$LOG_FILE} {
-            roll_size 10MB
-            roll_keep 10
-        }
-    }
-
-    tls {
-        dns duckdns {$DUCKDNS_TOKEN}
-    }
+    import dns_duck
 
     encode zstd gzip
-
 
     reverse_proxy nextcloud:80
 }

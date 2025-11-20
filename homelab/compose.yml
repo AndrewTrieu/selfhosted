@@ -9,7 +9,7 @@ services:
     volumes:
       - ./services/vaultwarden:/data
     environment:
-      DOMAIN: "https://vault.example.com" # Change to yours
+      DOMAIN: "https://${VAULT_DOMAIN}"
 
   # ==========================
   # 2FAuth (2FA manager)
@@ -21,19 +21,17 @@ services:
     volumes:
       - ./services/2fauth:/data
     environment:
-      - APP_NAME=2FAuth
-      - APP_ENV=production
-      - APP_DEBUG=false
-      - APP_TIMEZONE=Europe/Helsinki
-      - SITE_OWNER=admin@example.com # Change to yours
-      - APP_KEY=SomeRandomStringOf32CharsExactly # Change to yours
-      - APP_URL=https://auth.example.com # Change to yours
-      - ASSET_URL=https://auth.example.com # Change to yours
-      - TRUSTED_PROXIES=*
-      - LOG_CHANNEL=daily
-      - LOG_LEVEL=notice
-    networks:
-      - default
+      APP_NAME: 2FAuth
+      APP_ENV: production
+      APP_DEBUG: false
+      APP_TIMEZONE: UTC
+      SITE_OWNER: ${EMAIL}      
+      APP_KEY:  ${APP_KEY}
+      APP_URL: "https://${AUTH_DOMAIN}"
+      ASSET_URL: "https://${AUTH_DOMAIN}"
+      TRUSTED_PROXIES: '*'
+      LOG_CHANNEL: daily
+      LOG_LEVEL: notice
 
   # ==========================
   # Nextcloud (Personal cloud / NAS)
@@ -45,16 +43,16 @@ services:
     volumes:
       - ./services/nextcloud:/var/www/html
     environment:
-      - NEXTCLOUD_ADMIN_USER=admin         # Change to yours
-      - NEXTCLOUD_ADMIN_PASSWORD=changeme  # Change to a strong password
-    networks:
-      - default
+      NEXTCLOUD_ADMIN_USER: ${NC_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NC_ADMIN_PASS}
 
   # ==========================
   # Caddy (Reverse proxy)
   # ==========================
   caddy:
-    image: caddy:2
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: caddy
     restart: always
     ports:
@@ -67,13 +65,12 @@ services:
       - ./caddy-config:/config
       - ./caddy-data:/data
     environment:
-      # For Caddy: hostnames only, no https://
-      VAULT_DOMAIN: "vault.example.com" # Change to yours
-      AUTH_DOMAIN:  "auth.example.com" # Change to yours
-      STORAGE_DOMAIN: "storage.example.com" # Change to yours
-      EMAIL: "admin@example.com" # Change to yours
-      DUCKDNS_TOKEN: "TOKEN" # Change to yours
-      LOG_FILE: "/data/access.log"
+      VAULT_DOMAIN: ${VAULT_DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
+      STORAGE_DOMAIN: ${STORAGE_DOMAIN}
+      EMAIL: ${EMAIL}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN}
+      LOG_FILE: /data/access.log
 
   # ==========================
   # Portainer (Docker manager)
@@ -132,8 +129,4 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-
-networks:
-  default:
-    driver: bridge
 
