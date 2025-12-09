@@ -34,17 +34,20 @@ services:
       LOG_LEVEL: notice
 
   # ==========================
-  # Nextcloud (Personal cloud / NAS)
+  # Filebrowser (Cloud file manager)
   # ==========================
-  nextcloud:
-    image: nextcloud:latest
-    container_name: nextcloud
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
     restart: always
     volumes:
-      - ./services/nextcloud:/var/www/html
+      - ./services/filebrowser/srv:/srv
+      - ./services/filebrowser/database:/database
+      - ./services/filebrowser/config:/config
     environment:
-      NEXTCLOUD_ADMIN_USER: ${NC_ADMIN_USER}
-      NEXTCLOUD_ADMIN_PASSWORD: ${NC_ADMIN_PASS}
+      - PUID=$(id -u)
+      - PGID=$(id -g)
+    
 
   # ==========================
   # Caddy (Reverse proxy)
@@ -130,3 +133,6 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
 
+networks:
+  default:
+    driver: bridge

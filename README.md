@@ -90,7 +90,10 @@ mkdir -p services/vaultwarden \
          services/caddy/data \
          services/netdata/config \
          services/netdata/lib \
-         services/netdata/cache
+         services/netdata/cache \
+         services/filebrowser/srv \
+         services/filebrowser/database \
+         services/filebrowser/config
 docker compose up -d
 ```
 
