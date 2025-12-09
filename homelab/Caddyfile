@@ -1,9 +1,12 @@
 # ===========================
-# DuckDNS
+# Porkbun
 # ===========================
-(dns_duck) {
+(dns_porkbun) {
     tls {
-        dns duckdns {env.DUCKDNS_TOKEN}
+        dns porkbun {
+                api_key {env.PORKBUN_API_KEY}
+                api_secret_key {env.PORKBUN_API_SECRET}
+        }
     }
     log {
         output file {env.LOG_FILE}
@@ -15,10 +18,9 @@
 # Vaultwarden
 # ===========================
 {env.VAULT_DOMAIN} {
-    import dns_duck
+    import dns_porkbun
 
-    encode zstd gzip
-
+    encode gzip
     reverse_proxy vaultwarden:80
 }
 
@@ -26,10 +28,9 @@
 # 2FAuth
 # ===========================
 {env.AUTH_DOMAIN} {
-    import dns_duck
+    import dns_porkbun
 
-    encode zstd gzip
-
+    encode gzip
     reverse_proxy 2fauth:8000
 }
 
@@ -37,10 +38,20 @@
 # Filebrowser
 # ===========================
 {env.STORAGE_DOMAIN} {
-    import dns_duck
+    import dns_porkbun
 
-    encode zstd gzip
-
+    encode gzip
     reverse_proxy filebrowser:80
+}
+
+# ===========================
+# WireGuard VPN
+# ===========================
+{env.VPN_DOMAIN} {
+    import dns_porkbun
+
+    encode gzip
+    tls internal
+    reverse_proxy wg-easy:51821
 }
 

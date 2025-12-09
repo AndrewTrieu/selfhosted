@@ -7,12 +7,12 @@ This repository contains the configuration for my personal homelab stack, includ
 | **Vaultwarden** | Self-hosted password manager (Bitwarden-compatible) | `https://vault.example.com` |
 | **2FAuth** | Self-hosted two-factor authentication manager | `https://auth.example.com` |
 | **Filebrowser** | Self-hosted file hosting service | `https://storage.example.com` |
-| **Caddy** | Reverse proxy with automatic HTTPS via DuckDNS (DNS-01) | *No direct UI* |
+| **Wg-easy** | Wireguard VPN with management console | `https://vpn.example.com` |
+| **Caddy** | Reverse proxy with automatic HTTPS | *No direct UI* |
 | **Portainer** | Makes Docker life 100x easier (visual container manager) | `https://<SERVER_IP>:9443` |
 | **Uptime Kuma** | Monitors homelab/domain uptime | `http://<SERVER_IP>:3001` |
 | **Dozzle** | Displays logs super easily (real-time Docker logs) | `http://<SERVER_IP>:9999` |
 | **Netdata** | Beautiful system and container monitoring | `http://<SERVER_IP>:19999` |
-| **DuckDNS Updater** | Updates current dynamic IP address automatically | Runs from `./duckdns/duck.sh` |
 
 The setup is built with Docker Compose and is designed to be simple, secure, and easy to maintain.
 
@@ -20,51 +20,43 @@ The setup is built with Docker Compose and is designed to be simple, secure, and
 
 ```bash
 .
-├── duckdns
-│   ├── duck.log        # Log file for DuckDNS updates
-│   └── duck.sh         # DuckDNS update script (runs via cron)
+├── porkbun
+│   └── porkbun_ddns.sh   # Porkbun DDNS update script (runs via cron)
 └── homelab
-    ├── Caddyfile       # Reverse proxy configuration for Caddy
-    └── compose.yml     # Docker Compose stack for all services
+    ├── Caddyfile         # Reverse proxy configuration for Caddy
+    └── compose.yml       # Docker Compose stack for all services
 ```
 
 ## Secrets and Environment Variables
 
-Before deploying, you **must** replace all placeholder values in the config files.
+Before deploying, you **must** replace all placeholder values in the config files. See `.env.example`.
 
-- `https://vault.example.com` and `vault.example.com` → your Vaultwarden domain
-- `https://auth.example.com` and `auth.example.com` → your 2FAuth domain
-- `https://storage.example.com` and `storage.example.com` → your Filebrowser domain
-- `admin@example.com` → your email address (used by Caddy / Let’s Encrypt and 2FAuth)
-- `TOKEN` → your DuckDNS token
-- `SomeRandomStringOf32CharsExactly` → a **32-character** random string for `APP_KEY`
+## Porkbun Dynamic DNS Updater
 
-## DuckDNS Dynamic DNS Updater
-
-The `duckdns/duck.sh` script updates all DuckDNS domains used by the homelab. It always logs to `duckdns/duck.log`.
+The script updates all Porkbun domains used by the homelab.
 
 ### Run manually
 
 ```bash
-cd duckdns
-./duck.sh
+cd porkbun
+./porkbun_ddns.sh
 ```
 
 ### Cron to run periodically (recommended)
 
 ```bash
-cd duckdns
-chmod 700 duck.sh
+cd porkbun
+chmod 700 porkbun_ddns.sh
 crontab -e
 ```
 
 Add:
 
 ```bash
-*/5 * * * * /path/to/duckdns/duck.sh >/dev/null 2>&1
+*/5 * * * * /path/to/porkbun/porkbun_ddns.sh >/dev/null 2>&1
 ```
 
-This ensures your DuckDNS domains always point to your current IP.
+This ensures your Porkbun domains always point to your current IP.
 
 ## Homelab Stack (Docker Compose)
 
@@ -75,6 +67,7 @@ The **homelab/** folder contains:
   - `https://<vault-domain>` → Vaultwarden
   - `https://<auth-domain>` → 2FAuth
   - `https://<storage-domain>` → Filebrowser
+  - `https://<vpn-domain>` → Wireguard
 
 ### Start the stack
 
@@ -91,7 +84,8 @@ mkdir -p services/vaultwarden \
          services/netdata/cache \
          services/filebrowser/srv \
          services/filebrowser/database \
-         services/filebrowser/config
+         services/filebrowser/config \
+         services/wg-easy/data
 ex```
 
 ### Stop the stack

@@ -1,8 +1,8 @@
-# Build Caddy with DuckDNS DNS provider
+# Build Caddy with Porkbun DNS provider
 FROM caddy:latest-builder AS builder
 
 RUN xcaddy build \
-    --with github.com/caddy-dns/duckdns
+    --with github.com/caddy-dns/porkbun
 
 FROM caddy:latest 
 
