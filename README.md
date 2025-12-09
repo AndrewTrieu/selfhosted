@@ -6,7 +6,7 @@ This repository contains the configuration for my personal homelab stack, includ
 |---------|-------------|------------|
 | **Vaultwarden** | Self-hosted password manager (Bitwarden-compatible) | `https://vault.example.com` |
 | **2FAuth** | Self-hosted two-factor authentication manager | `https://auth.example.com` |
-| **Nextcloud** | Self-hosted file hosting service | `https://storage.example.com` |
+| **Filebrowser** | Self-hosted file hosting service | `https://storage.example.com` |
 | **Caddy** | Reverse proxy with automatic HTTPS via DuckDNS (DNS-01) | *No direct UI* |
 | **Portainer** | Makes Docker life 100x easier (visual container manager) | `https://<SERVER_IP>:9443` |
 | **Uptime Kuma** | Monitors homelab/domain uptime | `http://<SERVER_IP>:3001` |
@@ -34,11 +34,10 @@ Before deploying, you **must** replace all placeholder values in the config file
 
 - `https://vault.example.com` and `vault.example.com` → your Vaultwarden domain
 - `https://auth.example.com` and `auth.example.com` → your 2FAuth domain
-- `https://storage.example.com` and `storage.example.com` → your Nextcloud domain
+- `https://storage.example.com` and `storage.example.com` → your Filebrowser domain
 - `admin@example.com` → your email address (used by Caddy / Let’s Encrypt and 2FAuth)
 - `TOKEN` → your DuckDNS token
 - `SomeRandomStringOf32CharsExactly` → a **32-character** random string for `APP_KEY`
-- `NEXTCLOUD_ADMIN_USER` and `NEXTCLOUD_ADMIN_PASSWORD` → your Nextcloud admin credentials
 
 ## DuckDNS Dynamic DNS Updater
 
@@ -75,7 +74,7 @@ The **homelab/** folder contains:
 - `Caddyfile` – defines routing for:
   - `https://<vault-domain>` → Vaultwarden
   - `https://<auth-domain>` → 2FAuth
-  - `https://<storage-domain>` → Nextcloud
+  - `https://<storage-domain>` → Filebrowser
 
 ### Start the stack
 
@@ -83,7 +82,6 @@ The **homelab/** folder contains:
 cd homelab
 mkdir -p services/vaultwarden \
          services/2fauth \
-         services/nextcloud \
          services/uptimekuma \
          services/portainer \
          services/caddy/config \
@@ -94,8 +92,7 @@ mkdir -p services/vaultwarden \
          services/filebrowser/srv \
          services/filebrowser/database \
          services/filebrowser/config
-docker compose up -d
-```
+ex```
 
 ### Stop the stack
 
@@ -138,7 +135,7 @@ Then restart the containers:
 
 ```bash
 cd homelab
-docker compose restart vaultwarden 2fauth nextcloud portainer dozzle uptime-kuma netdata
+docker compose restart vaultwarden 2fauth filebrowser portainer dozzle uptime-kuma netdata
 ```
 
 ## Updating

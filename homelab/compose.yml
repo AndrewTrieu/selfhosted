@@ -44,10 +44,7 @@ services:
       - ./services/filebrowser/srv:/srv
       - ./services/filebrowser/database:/database
       - ./services/filebrowser/config:/config
-    environment:
-      - PUID=$(id -u)
-      - PGID=$(id -g)
-    
+    user: "1000:1000"
 
   # ==========================
   # Caddy (Reverse proxy)
