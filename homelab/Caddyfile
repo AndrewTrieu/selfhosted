@@ -55,3 +55,15 @@
     reverse_proxy wg-easy:51821
 }
 
+# ===========================
+# Gitea
+# ===========================
+{env.VPN_DOMAIN} {
+    import dns_porkbun
+
+    encode gzip
+    tls internal
+    reverse_proxy gitea:3000
+}
+
+
