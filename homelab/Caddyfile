@@ -45,6 +45,23 @@
 }
 
 # ===========================
+# Adguard Home
+# ===========================
+{env.DNS_DOMAIN} {
+    import dns_porkbun
+
+    encode gzip
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+    }
+
+    reverse_proxy adguard:3000
+}
+
+# ===========================
 # WireGuard VPN
 # ===========================
 {env.VPN_DOMAIN} {

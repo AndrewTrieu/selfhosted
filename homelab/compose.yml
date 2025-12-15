@@ -53,6 +53,26 @@ services:
       - proxy
 
   # ==========================
+  # AdGuard Home (DNS ad blocker)
+  # ==========================
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    restart: always
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+    volumes:
+      - ./services/adguard/work:/opt/adguardhome/work
+      - ./services/adguard/conf:/opt/adguardhome/conf
+    cap_add:
+      - NET_ADMIN
+    networks:
+      vpndns:
+        ipv4_address: 10.2.0.100
+      proxy: {}
+
+  # ==========================
   # WG-Easy (WireGuard VPN)
   # ==========================
   wg-easy:
@@ -62,6 +82,7 @@ services:
     environment:
       WG_HOST: ${VPN_DOMAIN}
       PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
+      WG_DEFAULT_DNS: 10.2.0.100
     volumes:
       - ./services/wg-easy/data:/etc/wireguard
       - /lib/modules:/lib/modules:ro
@@ -75,7 +96,9 @@ services:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
     networks:
-      - proxy
+      vpndns:
+        ipv4_address: 10.2.0.90
+      proxy: {}
 
   # ==========================
   # Gitea Database (PostgreSQL)
@@ -115,7 +138,6 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
-      - "3000:3000"
       - "222:22"
     networks:
       - proxy
@@ -134,16 +156,16 @@ services:
       - 443:443
       - 443:443/udp
     volumes:
-      - ./caddy:/usr/bin/caddy 
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./caddy-config:/config
-      - ./caddy-data:/data
+      - ./services/caddy/config:/config
+      - ./services/caddy/data:/data
     environment:
       VAULT_DOMAIN: ${VAULT_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN}
       STORAGE_DOMAIN: ${STORAGE_DOMAIN}
       VPN_DOMAIN: ${VPN_DOMAIN}
       GITEA_DOMAIN: ${GITEA_DOMAIN}
+      DNS_DOMAIN: ${DNS_DOMAIN}
       EMAIL: ${EMAIL}
       PORKBUN_API_KEY: ${PORKBUN_API_KEY}
       PORKBUN_API_SECRET: ${PORKBUN_API_SECRET}
@@ -212,3 +234,7 @@ services:
 networks:
   proxy:
     driver: bridge
+  vpndns:
+    ipam:
+      config:
+        - subnet: 10.2.0.0/24

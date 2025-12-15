@@ -7,8 +7,9 @@ This repository contains the configuration for my personal homelab stack, includ
 | **Vaultwarden** | Self-hosted password manager (Bitwarden-compatible) | `https://vault.example.com` |
 | **2FAuth** | Self-hosted two-factor authentication manager | `https://auth.example.com` |
 | **Filebrowser** | Self-hosted file hosting service | `https://storage.example.com` |
-| **Wg-easy** | Git with a cup of tea! | `https://vpn.example.com` |
-| **Gitea** | Wireguard VPN with management console | `https://git.example.com` |
+| **Adguard Home** | Block ads and trackers on your network | `https://dns.example.com` |
+| **Wg-easy** | Wireguard VPN with management console  | `https://vpn.example.com` |
+| **Gitea** | Git with a cup of tea!| `https://git.example.com` |
 | **Caddy** | Reverse proxy with automatic HTTPS | *No direct UI* |
 | **Portainer** | Makes Docker life 100x easier (visual container manager) | `https://<SERVER_IP>:9443` |
 | **Uptime Kuma** | Monitors homelab/domain uptime | `http://<SERVER_IP>:3001` |
@@ -36,7 +37,7 @@ The setup is built with Docker Compose and is designed to be simple, secure, and
 | **HTTP (Caddy, ACME)**       | **80**        | 80            | TCP      | ✅ Yes                    | Required for certificate issuance + redirect         |
 | **WireGuard VPN**            | **51820**     | 51820         | UDP      | ✅ Yes                    | Main WireGuard tunnel port                           |
 | **WG-Easy Web UI**           | 51821         | 51821         | TCP      | Optional                 | Only forward if you want to access admin UI remotely |
-| **Gitea SSH (Git over SSH)** | **222**       | 22            | TCP      | Optional but recommended | Required for `git clone ssh://...`                   |
+| **Gitea SSH (Git over SSH)** | 222           | 222           | TCP      | Optional but recommended | Required for `git clone ssh://...`                   |
 
 ## Secrets and Environment Variables
 
@@ -78,6 +79,7 @@ The **homelab/** folder contains:
   - `https://<vault-domain>` → Vaultwarden
   - `https://<auth-domain>` → 2FAuth
   - `https://<storage-domain>` → Filebrowser
+  - `https://<dns-domain>` → Adguard Home
   - `https://<vpn-domain>` → Wireguard
   - `https://<git-domain>` → Gitea
 
@@ -99,7 +101,9 @@ mkdir -p services/vaultwarden \
          services/filebrowser/config \
          services/wg-easy/data \
          services/gitea/data \
-         services/gitea/postgres
+         services/gitea/postgres \
+         services/adguard/work \
+         services/adguard/conf
 ```
 
 ### Stop the stack
@@ -143,7 +147,7 @@ Then restart the containers:
 
 ```bash
 cd homelab
-docker compose restart caddy vaultwarden 2fauth wg-easy gitea filebrowser portainer dozzle uptime-kuma netdata
+docker compose restart caddy vaultwarden 2fauth adguard wg-easy gitea filebrowser portainer dozzle uptime-kuma netdata
 ```
 
 ## Updating
