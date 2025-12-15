@@ -8,6 +8,8 @@ SUBDOMAINS=(
   "auth"
   "cloud"
   "vpn"
+  "dns"
+  "git"
 )
 
 TTL="600"

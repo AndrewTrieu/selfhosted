@@ -1,47 +1,68 @@
 # Homelab Setup
 
-This repository contains the configuration for my personal homelab stack, including:
+This repository contains the configuration for my personal homelab stack, built with Docker Compose and fronted by Caddy as a secure reverse proxy.
 
-| Service | Description | Access URL |
-|---------|-------------|------------|
-| **Vaultwarden** | Self-hosted password manager (Bitwarden-compatible) | `https://vault.example.com` |
-| **2FAuth** | Self-hosted two-factor authentication manager | `https://auth.example.com` |
-| **Filebrowser** | Self-hosted file hosting service | `https://storage.example.com` |
-| **Adguard Home** | Block ads and trackers on your network | `https://dns.example.com` |
-| **Wg-easy** | Wireguard VPN with management console  | `https://vpn.example.com` |
-| **Gitea** | Git with a cup of tea!| `https://git.example.com` |
-| **Caddy** | Reverse proxy with automatic HTTPS | *No direct UI* |
-| **Portainer** | Makes Docker life 100x easier (visual container manager) | `https://<SERVER_IP>:9443` |
-| **Uptime Kuma** | Monitors homelab/domain uptime | `http://<SERVER_IP>:3001` |
-| **Dozzle** | Displays logs super easily (real-time Docker logs) | `http://<SERVER_IP>:9999` |
-| **Netdata** | Beautiful system and container monitoring | `http://<SERVER_IP>:19999` |
+The goal of this setup is to be simple, secure, and easy to maintain, while providing essential self-hosted services for daily use.
 
-The setup is built with Docker Compose and is designed to be simple, secure, and easy to maintain.
+- Automatic HTTPS (Caddy + ACME + DNS-01)
+- Dynamic DNS with Porkbun
+- Password management & 2FA
+- WireGuard VPN with web UI
+- Ad & tracker blocking
+- Fully containerized (Docker Compose)
+- Monitoring, logs, and uptime checks
+- Zero-downtime updates
+- Auto-start on boot
+
+| Service          | Description                                         | Access                        |
+| ---------------- | --------------------------------------------------- | ----------------------------- |
+| **Vaultwarden**  | Self-hosted Bitwarden-compatible password manager   | `https://vault.example.com`   |
+| **2FAuth**       | Self-hosted two-factor authentication manager       | `https://auth.example.com`    |
+| **Filebrowser**  | Lightweight self-hosted file management             | `https://storage.example.com` |
+| **AdGuard Home** | Network-wide ad & tracker blocking                  | `https://dns.example.com`     |
+| **WG-Easy**      | WireGuard VPN with web management UI                | `https://vpn.example.com`     |
+| **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”) | `https://git.example.com`     |
+| **Caddy**        | Reverse proxy with automatic HTTPS (ACME + DNS-01)  | *No direct UI*                |
+| **Portainer**    | Visual Docker container management                  | `https://<SERVER_IP>:9443`    |
+| **Uptime Kuma**  | Uptime and service monitoring                       | `http://<SERVER_IP>:3001`     |
+| **Dozzle**       | Real-time Docker log viewer                         | `http://<SERVER_IP>:9999`     |
+| **Netdata**      | System & container performance monitoring           | `http://<SERVER_IP>:19999`    |
 
 ## Directory Structure
 
 ```bash
 .
 ├── porkbun
-│   └── porkbun_ddns.sh   # Porkbun DDNS update script (runs via cron)
+│   └── porkbun_ddns.sh    # Porkbun Dynamic DNS updater (cron-based)
 └── homelab
-    ├── Caddyfile         # Reverse proxy configuration for Caddy
-    └── compose.yml       # Docker Compose stack for all services
+    ├── Caddyfile          # Caddy reverse proxy configuration
+    ├── compose.yml        # Docker Compose stack
+    ├── Dockerfile         # Custom Caddy build (Porkbun DNS plugin)
+    └── .env.example       # Environment variable template
 ```
 
 ## Port Forwarding on Your Router
 
-| Service / Purpose            | External Port | Internal Port | Protocol | Required?                | Notes                                                |
-| ---------------------------- | ------------- | ------------- | -------- | ------------------------ | ---------------------------------------------------- |
-| **HTTPS (Caddy)**            | **443**       | 443           | TCP/UDP  | ✅ Yes                    | Needed for all domains + HTTP/3/QUIC                 |
-| **HTTP (Caddy, ACME)**       | **80**        | 80            | TCP      | ✅ Yes                    | Required for certificate issuance + redirect         |
-| **WireGuard VPN**            | **51820**     | 51820         | UDP      | ✅ Yes                    | Main WireGuard tunnel port                           |
-| **WG-Easy Web UI**           | 51821         | 51821         | TCP      | Optional                 | Only forward if you want to access admin UI remotely |
-| **Gitea SSH (Git over SSH)** | 222           | 222           | TCP      | Optional but recommended | Required for `git clone ssh://...`                   |
+| Purpose           | External  | Internal | Proto   | Required               | Notes                                    |
+| ----------------- | --------- | -------- | ------- | ---------------------- | ---------------------------------------- |
+| **HTTPS (Caddy)** | **443**   | 443      | TCP/UDP | ✅ Yes                 | Required for all domains + HTTP/3 (QUIC) |
+| **HTTP (ACME)**   | **80**    | 80       | TCP     | ✅ Yes                 | Certificate issuance + redirects         |
+| **WireGuard VPN** | **51820** | 51820    | UDP     | ✅ Yes                 | Main VPN tunnel                          |
+| **WG-Easy UI**    | 51821     | 51821    | TCP     | Optional               | Only if remote admin UI is needed        |
+| **Gitea SSH**     | 222       | 222      | TCP     | Optional (recommended) | Required for Git over SSH                |
 
 ## Secrets and Environment Variables
 
-Before deploying, you **must** replace all placeholder values in the config files. See `.env.example`.
+Before running the stack:
+
+1. Copy environment variables:
+
+```bash
+cp homelab/.env.example homelab/.env
+```
+
+2. Replace all placeholder values
+3. Add Porkbun API credentials to porkbun_ddns.sh
 
 ## Porkbun Dynamic DNS Updater
 
@@ -72,7 +93,7 @@ This ensures your Porkbun domains always point to your current IP.
 
 ## Homelab Stack (Docker Compose)
 
-The **homelab/** folder contains:
+The `homelab/` directory contains everything needed to run the stack:
 
 - `compose.yml` – spins up Docker containers
 - `Caddyfile` – defines routing for:
@@ -82,28 +103,14 @@ The **homelab/** folder contains:
   - `https://<dns-domain>` → Adguard Home
   - `https://<vpn-domain>` → Wireguard
   - `https://<git-domain>` → Gitea
+- `Dockerfile` – builds Caddy with Porkbun DNS provider
+- `.env.example` – contains examples the necessary environment variables
 
 ### Start the stack
 
 ```bash
 cd homelab
-mkdir -p services/vaultwarden \
-         services/2fauth \
-         services/uptimekuma \
-         services/portainer \
-         services/caddy/config \
-         services/caddy/data \
-         services/netdata/config \
-         services/netdata/lib \
-         services/netdata/cache \
-         services/filebrowser/srv \
-         services/filebrowser/database \
-         services/filebrowser/config \
-         services/wg-easy/data \
-         services/gitea/data \
-         services/gitea/postgres \
-         services/adguard/work \
-         services/adguard/conf
+docker compose up -d
 ```
 
 ### Stop the stack
@@ -147,7 +154,7 @@ Then restart the containers:
 
 ```bash
 cd homelab
-docker compose restart caddy vaultwarden 2fauth adguard wg-easy gitea filebrowser portainer dozzle uptime-kuma netdata
+docker compose restart
 ```
 
 ## Updating
