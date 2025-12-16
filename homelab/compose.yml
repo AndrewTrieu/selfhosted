@@ -53,12 +53,40 @@ services:
       - proxy
 
   # ==========================
+  # Unbound DNS Resolver with Redis Cache
+  # ==========================
+  unbound-redis:
+    image: redis:latest
+    container_name: unbound-redis
+    hostname: redis
+    restart: unless-stopped
+    volumes:
+      - ./services/unbound/redis:/data
+    networks:
+      - vpndns
+
+  unbound:
+    image: klutchell/unbound:latest
+    container_name: unbound
+    restart: always
+    depends_on:
+      - unbound-redis
+    volumes:
+    - ./services/unbound/custom.conf.d:/etc/unbound/custom.conf.d:ro
+    - ./services/unbound/root.hints:/etc/unbound/root.hints:ro
+    networks:
+      vpndns:
+        ipv4_address: 10.2.0.53
+
+  # ==========================
   # AdGuard Home (DNS ad blocker)
   # ==========================
   adguard:
     image: adguard/adguardhome:latest
     container_name: adguard
     restart: always
+    depends_on:
+      - unbound
     ports:
       - "53:53/tcp"
       - "53:53/udp"
@@ -68,9 +96,9 @@ services:
     cap_add:
       - NET_ADMIN
     networks:
+      proxy: {}
       vpndns:
         ipv4_address: 10.2.0.100
-      proxy: {}
 
   # ==========================
   # WG-Easy (WireGuard VPN)
@@ -79,6 +107,8 @@ services:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: wg-easy
     restart: always
+    depends_on:
+      - adguard
     environment:
       WG_HOST: ${VPN_DOMAIN}
       PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
@@ -95,13 +125,13 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
-    networks:
+    networks: 
+      proxy: {}
       vpndns:
         ipv4_address: 10.2.0.90
-      proxy: {}
 
   # ==========================
-  # Gitea Database (PostgreSQL)
+  # Gitea with Postgres DB
   # ==========================
   gitea-db:
     image: postgres:15
@@ -116,9 +146,6 @@ services:
     networks:
       - proxy
 
-  # ==========================
-  # Gitea (Git service)
-  # ==========================
   gitea:
     image: gitea/gitea:latest
     container_name: gitea

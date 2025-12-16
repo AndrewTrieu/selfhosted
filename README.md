@@ -8,7 +8,8 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 - Dynamic DNS with Porkbun
 - Password management & 2FA
 - WireGuard VPN with web UI
-- Ad & tracker blocking
+- Network-wide ad & tracker blocking
+- Recursive DNS with Unbound + Redis cachedb
 - Fully containerized (Docker Compose)
 - Monitoring, logs, and uptime checks
 - Zero-downtime updates
@@ -16,15 +17,16 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 
 | Service          | Description                                         | Access                        |
 | ---------------- | --------------------------------------------------- | ----------------------------- |
-| **Vaultwarden**  | Self-hosted Bitwarden-compatible password manager   | `https://vault.example.com`   |
+| **Vaultwarden**  | Bitwarden-compatible password manager               | `https://vault.example.com`   |
 | **2FAuth**       | Self-hosted two-factor authentication manager       | `https://auth.example.com`    |
-| **Filebrowser**  | Lightweight self-hosted file management             | `https://storage.example.com` |
-| **AdGuard Home** | Network-wide ad & tracker blocking                  | `https://dns.example.com`     |
-| **WG-Easy**      | WireGuard VPN with web management UI                | `https://vpn.example.com`     |
+| **Filebrowser**  | Lightweight web-based file manager                  | `https://storage.example.com` |
+| **AdGuard Home** | DNS-level ad & tracker blocking                     | `https://dns.example.com`     |
+| **Unbound**      | Recursive DNS resolver (DNSSEC, Redis cachedb)      | *Internal*                    |
+| **WG-Easy**      | WireGuard VPN with management UI                    | `https://vpn.example.com`     |
 | **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”) | `https://git.example.com`     |
-| **Caddy**        | Reverse proxy with automatic HTTPS (ACME + DNS-01)  | *No direct UI*                |
-| **Portainer**    | Visual Docker container management                  | `https://<SERVER_IP>:9443`    |
-| **Uptime Kuma**  | Uptime and service monitoring                       | `http://<SERVER_IP>:3001`     |
+| **Caddy**        | Reverse proxy with automatic HTTPS                  | *No direct UI*                |
+| **Portainer**    | Docker container management                         | `https://<SERVER_IP>:9443`    |
+| **Uptime Kuma**  | Uptime & service monitoring                         | `http://<SERVER_IP>:3001`     |
 | **Dozzle**       | Real-time Docker log viewer                         | `http://<SERVER_IP>:9999`     |
 | **Netdata**      | System & container performance monitoring           | `http://<SERVER_IP>:19999`    |
 
@@ -33,12 +35,16 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 ```bash
 .
 ├── porkbun
-│   └── porkbun_ddns.sh    # Porkbun Dynamic DNS updater (cron-based)
+│   └── porkbun_ddns.sh        # Porkbun Dynamic DNS updater
 └── homelab
-    ├── Caddyfile          # Caddy reverse proxy configuration
-    ├── compose.yml        # Docker Compose stack
-    ├── Dockerfile         # Custom Caddy build (Porkbun DNS plugin)
-    └── .env.example       # Environment variable template
+    ├── Caddyfile              # Caddy reverse proxy configuration
+    ├── compose.yml            # Docker Compose stack
+    ├── Dockerfile             # Custom Caddy build (Porkbun DNS plugin)
+    ├── .env.example           # Environment variable template
+    └── services
+        └── unbound
+            ├── custom.conf.d  # Unbound modular configuration
+            └── root.hints
 ```
 
 ## Port Forwarding on Your Router
@@ -90,6 +96,64 @@ Add:
 ```
 
 This ensures your Porkbun domains always point to your current IP.
+
+## Update `root.hints` for Unbound
+
+Automatically update the root hints file every year on 1st January at 3:00.
+
+```bash
+crontab -e
+```
+
+Add:
+
+```bash
+0 3 1 1 * cd /path/to/homelab/services/unbound && \
+curl -fsS -o root.hints https://www.internic.net/domain/named.root && \
+cd /path/to/homelab && docker compose restart unbound
+```
+
+## Host Requirement: Disable `systemd-resolved` DNS Stub (Port 53)
+
+On most modern Linux distributions (including Ubuntu, Debian, Linux Mint, etc.),
+`systemd-resolved` runs a DNS stub listener on `127.0.0.53:53`. This conflicts with AdGuard Home, which needs to bind to port 53 (TCP/UDP).
+
+If this is not disabled, Docker will fail to start AdGuard Home with an error: `failed to bind port 53: address already in use`.
+
+1. Create a systemd override for `systemd-resolved`:
+
+Create the directory if it does not exist:
+
+```bash
+sudo mkdir -p /etc/systemd/resolved.conf.d
+```
+
+Create the config file:
+
+```bash
+sudo nano /etc/systemd/resolved.conf.d/adguardhome.conf
+```
+
+Add:
+
+```conf
+[Resolve]
+DNS=127.0.0.1
+DNSStubListener=no
+```
+
+2. Switch to the correct `resolv.conf`:
+
+```bash
+sudo mv /etc/resolv.conf /etc/resolv.conf.backup
+sudo ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
+```
+
+3. Restart `systemd-resolved`:
+
+```bash
+sudo systemctl reload-or-restart systemd-resolved
+```
 
 ## Homelab Stack (Docker Compose)
 
@@ -157,7 +221,7 @@ cd homelab
 docker compose restart
 ```
 
-## Updating
+### Updating
 
 To update to the latest versions:
 
