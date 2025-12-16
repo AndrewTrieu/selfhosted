@@ -10,6 +10,7 @@ SUBDOMAINS=(
   "vpn"
   "dns"
   "git"
+  "xui"
 )
 
 TTL="600"

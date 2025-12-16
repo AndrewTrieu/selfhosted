@@ -131,6 +131,22 @@ services:
         ipv4_address: 10.2.0.90
 
   # ==========================
+  # 3X-UI
+  # ==========================
+  3xui:
+    image: ghcr.io/mhsanaei/3x-ui:latest
+    container_name: 3xui_app
+    volumes:
+      - ./services/3x-ui/db:/etc/x-ui
+      - ./services/3x-ui/cert:/root/cert
+    environment:
+      XRAY_VMESS_AEAD_FORCED: "false"
+      XUI_ENABLE_FAIL2BAN: "true"
+    tty: true
+    network_mode: host
+    restart: always
+
+  # ==========================
   # Gitea with Postgres DB
   # ==========================
   gitea-db:
@@ -187,12 +203,14 @@ services:
       - ./services/caddy/config:/config
       - ./services/caddy/data:/data
     environment:
+      SERVER_ADDR: ${SERVER_ADDR}
       VAULT_DOMAIN: ${VAULT_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN}
       STORAGE_DOMAIN: ${STORAGE_DOMAIN}
       VPN_DOMAIN: ${VPN_DOMAIN}
-      GITEA_DOMAIN: ${GITEA_DOMAIN}
+      GIT_DOMAIN: ${GIT_DOMAIN}
       DNS_DOMAIN: ${DNS_DOMAIN}
+      XUI_DOMAIN: ${XUI_DOMAIN}
       EMAIL: ${EMAIL}
       PORKBUN_API_KEY: ${PORKBUN_API_KEY}
       PORKBUN_API_SECRET: ${PORKBUN_API_SECRET}
