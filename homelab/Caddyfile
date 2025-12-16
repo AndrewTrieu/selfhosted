@@ -92,7 +92,7 @@
     encode gzip
 
     route /admin* {
-        reverse_proxy {env.SERVER_ADDR}:2053
+        reverse_proxy host.docker.internal:2053
     }
 
     header {

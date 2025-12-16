@@ -198,12 +198,13 @@ services:
       - 80:80
       - 443:443
       - 443:443/udp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./services/caddy/config:/config
       - ./services/caddy/data:/data
     environment:
-      SERVER_ADDR: ${SERVER_ADDR}
       VAULT_DOMAIN: ${VAULT_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN}
       STORAGE_DOMAIN: ${STORAGE_DOMAIN}
