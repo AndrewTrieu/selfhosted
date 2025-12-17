@@ -280,7 +280,22 @@ Perform a sanity check at [www.dnsleaktest.com](https://www.dnsleaktest.com). If
 
 ___
 
-### 7. Configure 3X-UI for Reverse Proxy
+### 7. Set Gitea's SSH Port to 222
+
+```bash
+nano /path/to/homelab/services/gitea/data/gitea/conf/app.ini
+```
+
+Ensure:
+
+```ini
+SSH_PORT = 222
+SSH_LISTEN_PORT = 22
+```
+
+___
+
+### 8. Configure 3X-UI for Reverse Proxy
 
 1. Navigate to `http://<local.server.ip.addr>:2053` and log in with:
 
@@ -295,7 +310,7 @@ ___
 
 ___
 
-### 8. Note on Xray inbounds' Configs
+### 9. Note on Xray inbounds' Configs
 
 #### Server
 
