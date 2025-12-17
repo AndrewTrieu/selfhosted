@@ -1,8 +1,8 @@
-# Build Caddy with Porkbun DNS provider
+# Build Caddy with Cloudflare DNS plugin
 FROM caddy:latest-builder AS builder
 
 RUN xcaddy build \
-    --with github.com/caddy-dns/porkbun
+    --with github.com/caddy-dns/cloudflare
 
 FROM caddy:latest 
 

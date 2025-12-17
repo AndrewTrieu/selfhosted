@@ -212,9 +212,9 @@ services:
       GIT_DOMAIN: ${GIT_DOMAIN}
       DNS_DOMAIN: ${DNS_DOMAIN}
       XUI_DOMAIN: ${XUI_DOMAIN}
+      REALITY_DOMAIN: ${REALITY_DOMAIN}
+      CF_API_TOKEN: ${CF_API_TOKEN}
       EMAIL: ${EMAIL}
-      PORKBUN_API_KEY: ${PORKBUN_API_KEY}
-      PORKBUN_API_SECRET: ${PORKBUN_API_SECRET}
       LOG_FILE: /data/access.log
     networks:
       - proxy

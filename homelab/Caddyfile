@@ -1,12 +1,9 @@
 # ===========================
-# Porkbun
+# Cloudflare DNS
 # ===========================
-(dns_porkbun) {
+(dns_cf) {
     tls {
-        dns porkbun {
-                api_key {env.PORKBUN_API_KEY}
-                api_secret_key {env.PORKBUN_API_SECRET}
-        }
+        dns cloudflare {env.CF_API_TOKEN}
     }
     log {
         output file {env.LOG_FILE}
@@ -18,7 +15,7 @@
 # Vaultwarden
 # ===========================
 {env.VAULT_DOMAIN} {
-    import dns_porkbun
+    import dns_cf
 
     encode gzip
     reverse_proxy vaultwarden:80
@@ -28,7 +25,7 @@
 # 2FAuth
 # ===========================
 {env.AUTH_DOMAIN} {
-    import dns_porkbun
+    import dns_cf
 
     encode gzip
     reverse_proxy 2fauth:8000
@@ -38,7 +35,7 @@
 # Filebrowser
 # ===========================
 {env.STORAGE_DOMAIN} {
-    import dns_porkbun
+    import dns_cf
 
     encode gzip
     reverse_proxy filebrowser:80
@@ -48,7 +45,7 @@
 # Adguard Home
 # ===========================
 {env.DNS_DOMAIN} {
-    import dns_porkbun
+    import dns_cf
 
     encode gzip
 
@@ -65,7 +62,7 @@
 # WireGuard VPN
 # ===========================
 {env.VPN_DOMAIN} {
-    import dns_porkbun
+    import dns_cf
 
     encode gzip
     tls internal
@@ -76,7 +73,7 @@
 # Gitea
 # ===========================
 {env.VPN_DOMAIN} {
-    import dns_porkbun
+    import dns_cf
 
     encode gzip
     tls internal
@@ -87,14 +84,25 @@
 # 3X-UI
 # ===========================
 {env.XUI_DOMAIN} {
-    import dns_porkbun
+    import dns_cf
 
     encode gzip
 
+    # ---- X-UI admin panel ----
     route /admin* {
         reverse_proxy host.docker.internal:2053
     }
 
+    # ---- VLESS WebSocket ----
+    route /ws* {
+        @websockets {
+            header Connection *Upgrade*
+            header Upgrade websocket
+        }
+        reverse_proxy @websockets host.docker.internal:10000
+        respond 403
+    }
+    
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options nosniff
@@ -102,4 +110,21 @@
         Referrer-Policy no-referrer
         -Server
     }
+
+    respond 404
+}
+
+# ===========================
+# Reality Domain - Block all traffic on HTTP/HTTPS
+# ===========================
+{env.REALITY_DOMAIN} {
+    import dns_cf
+
+    encode gzip
+
+    @any {
+        protocol http
+        protocol https
+    }
+    respond @any 444
 }
