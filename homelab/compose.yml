@@ -185,6 +185,25 @@ services:
     networks:
       - proxy
 
+  gitea-runner:
+    image: gitea/act_runner:latest
+    container_name: gitea-runner
+    restart: always
+    depends_on:
+      - gitea
+    volumes:
+      - ./services/gitea/runner/config.yaml:/config.yaml:ro
+      - ./services/gitea/runner/data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      CONFIG_FILE: /config.yaml
+      GITEA_INSTANCE_URL: "https://${GIT_DOMAIN}"
+      GITEA_RUNNER_REGISTRATION_TOKEN: "${GITEA_RUNNER_REGISTRATION_TOKEN}"
+      GITEA_RUNNER_NAME: homelab-runner
+      GITEA_RUNNER_LABELS: ubuntu-latest,docker,self-hosted
+    networks:
+      - proxy
+
   # ==========================
   # Caddy (Reverse proxy)
   # ==========================
@@ -205,6 +224,7 @@ services:
       - ./services/caddy/config:/config
       - ./services/caddy/data:/data
     environment:
+      ROOT_DOMAIN: ${ROOT_DOMAIN}
       VAULT_DOMAIN: ${VAULT_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN}
       STORAGE_DOMAIN: ${STORAGE_DOMAIN}

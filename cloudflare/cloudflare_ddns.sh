@@ -10,6 +10,7 @@ DOMAIN="example.com"
 
 # Cloudflare PROXIED = true (orange cloud)
 PROXIED_ON=(
+  "@"
   "vault"
   "auth"
   "cloud"
@@ -54,7 +55,13 @@ echo "SUCCESS: Zone ID resolved"
 update_record() {
   local SUB="$1"
   local PROXIED="$2"
-  local NAME="$SUB.$DOMAIN"
+  local NAME
+
+  if [[ "$SUB" == "@" ]]; then
+    NAME="$DOMAIN"
+  else
+    NAME="$SUB.$DOMAIN"
+  fi
 
   echo "INFO: Updating $NAME (proxied=$PROXIED)"
 

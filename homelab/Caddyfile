@@ -12,12 +12,23 @@
 }
 
 # ===========================
+# Root Domain
+# Default landing page. Do something more useful here if desired.
+# ===========================
+{env.ROOT_DOMAIN} {
+    import dns_cf
+
+    encode gzip zstd
+    respond 200 "Welcome to {env.ROOT_DOMAIN}!\n"
+}
+
+# ===========================
 # Vaultwarden
 # ===========================
 {env.VAULT_DOMAIN} {
     import dns_cf
 
-    encode gzip
+    encode gzip zstd
     reverse_proxy vaultwarden:80
 }
 
@@ -27,7 +38,7 @@
 {env.AUTH_DOMAIN} {
     import dns_cf
 
-    encode gzip
+    encode gzip zstd
     reverse_proxy 2fauth:8000
 }
 
@@ -37,7 +48,7 @@
 {env.STORAGE_DOMAIN} {
     import dns_cf
 
-    encode gzip
+    encode gzip zstd
     reverse_proxy filebrowser:80
 }
 
@@ -47,7 +58,7 @@
 {env.DNS_DOMAIN} {
     import dns_cf
 
-    encode gzip
+    encode gzip zstd
 
     header {
         X-Content-Type-Options nosniff
@@ -60,23 +71,22 @@
 
 # ===========================
 # WireGuard VPN
+# Warning: Exposes your VPN management interface to the internet. Consider removing this section if not needed.
 # ===========================
 {env.VPN_DOMAIN} {
     import dns_cf
 
-    encode gzip
-    tls internal
+    encode gzip zstd
     reverse_proxy wg-easy:51821
 }
 
 # ===========================
 # Gitea
 # ===========================
-{env.VPN_DOMAIN} {
+{env.GIT_DOMAIN} {
     import dns_cf
 
-    encode gzip
-    tls internal
+    encode gzip zstd
     reverse_proxy gitea:3000
 }
 
@@ -86,7 +96,7 @@
 {env.XUI_DOMAIN} {
     import dns_cf
 
-    encode gzip
+    encode gzip zstd
 
     # ---- X-UI admin panel ----
     route /admin* {
@@ -120,7 +130,7 @@
 {env.REALITY_DOMAIN} {
     import dns_cf
 
-    encode gzip
+    encode gzip zstd
 
     @any {
         protocol http

@@ -1,0 +1,9 @@
+log:
+  level: info
+
+runner:
+  capacity: 1
+
+container:
+  docker_host: unix:///var/run/docker.sock
+  network: bridge

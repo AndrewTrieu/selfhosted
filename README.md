@@ -34,6 +34,85 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 | **Dozzle**       | Real-time Docker log viewer                         | `http://<SERVER_IP>:9999`       |
 | **Netdata**      | System & container performance monitoring           | `http://<SERVER_IP>:19999`      |
 
+## Architecture
+
+```mermaid
+flowchart LR
+    Client["Client Devices"]
+
+    %% =====================
+    %% DNS flow
+    %% =====================
+    Client -->|"DNS queries"| Router
+    Router -->|"DNS"| AdGuardDNS
+    AdGuardDNS -->|"Upstream DNS"| Unbound
+    Unbound -->|"Recursive queries"| InternetDNS[(Root / Authoritative DNS)]
+
+    %% =====================
+    %% Entry points
+    %% =====================
+    Client -->|"HTTPS :443"| Cloudflare
+    Client -->|Reality TCP :8443| XrayReality
+    Client -->|WireGuard UDP :51820| WireGuardVPN
+    Client -->|SSH TCP :222| GiteaSSH
+
+    %% =====================
+    %% Web & CDN flow
+    %% =====================
+    Cloudflare -->|"HTTPS"| Caddy
+
+    %% Reverse proxy targets
+    Caddy --> Vaultwarden
+    Caddy --> TwoFAuth["2FAuth"]
+    Caddy --> Filebrowser
+    Caddy --> GiteaUI["Gitea UI"]
+    Caddy --> AdGuardUI["AdGuard UI"]
+    Caddy --> WGEasyUI["WG-Easy UI"]
+    Caddy --> XUIAdmin["3X-UI Admin Panel"]
+
+    %% =====================
+    %% VLESS over CDN (WebSocket only)
+    %% =====================
+    Cloudflare -->|"WebSocket"| Caddy
+    Caddy -->|WebSocket :10000| XrayWS
+
+    %% =====================
+    %% Containers
+    %% =====================
+    subgraph DockerHost["Docker Host"]
+        Caddy
+        Vaultwarden
+        TwoFAuth
+        Filebrowser
+        GiteaSSH
+        Unbound
+
+        subgraph AdGuardHome["AdGuard Home"]
+            AdGuardDNS["AdGuard DNS (53/TCP,UDP)"]
+            AdGuardUI["AdGuard UI (3000)"]
+        end
+
+        subgraph Gitea["Gitea"]
+            GiteaSSH["Gitea SSH (222/TCP)"]
+            GiteaUI["Gitea UI (3000)"]
+        end
+
+        subgraph XUI["3X-UI (Xray Core)"]
+            XUIAdmin["Admin Panel (:2053)"]
+
+            subgraph XrayInbounds["Xray Inbounds"]
+                XrayWS["VLESS WebSocket (:10000)"]
+                XrayReality["VLESS Reality (:8443)"]
+            end
+        end
+
+        subgraph WireGuardStack["WG-Easy"]
+            WireGuardVPN["WireGuard VPN (:51820)"]
+            WGEasyUI["WG-Easy UI (:51821)"]
+        end
+    end
+```
+
 ## DNS & Proxy Model
 
 This homelab intentionally uses multiple access methods, each optimized for a different network environment. Not all traffic is treated equally, and Cloudflare proxying is applied selectively based on protocol requirements and threat model.
@@ -61,6 +140,7 @@ These domains are public-facing HTTP(S) services and benefit from Cloudflare’s
 These domains are non-HTTP or stealth-oriented services and must bypass Cloudflare entirely.
 
 - vpn.example.com
+  - Wireguard's management UI should not be exposed to the public internet. Think carefully if you want to do this!
 - reality.example.com
 
 ## Directory Structure
@@ -325,3 +405,9 @@ ___
 | ------------- | --------------------- | ------ | ------- | ------- | ------------------ | ------------------ | --------------------------- | -------------------- |
 | **Reality**   | `reality.example.com` | `8443` | Reality | `tcp`   | `xtls-rprx-vision` | N/A                | Fake SNI (e.g. `apple.com`) | Stealth / censorship |
 | **WebSocket** | `xui.example.com`     | `443`  | TLS     | `ws`    | N/A                | `/ws`              | `xui.example.com`           | Fallback             |
+
+## Future roadmap
+
+- Add CrowdSec for adaptive intrusion protection  
+- Add ZFS for data integrity and snapshots (if I can afford the hardware)
+- Add UPS for graceful shutdown and storage safety (unlikely to happen)
