@@ -189,16 +189,13 @@ ___
 
 ### 1. Secrets and Environment Variables
 
-Before running the stack:
-
-1. Copy environment variables:
+Before running the stack, set environment variables:
 
    ```bash
    cp homelab/.env.example homelab/.env
    ```
 
-2. Replace all placeholder values
-3. Add Cloudflare API token and the root domain.
+You MUST replace all placeholder values!
 
 > Note! Cloudflare API token must have permissions: `Zone.Zone:Read` and `Zone.DNS:Edit`.
 ___
@@ -210,14 +207,14 @@ The script creates or updates all domains used by the homelab.
 #### Run manually if needed
 
 ```bash
-cd cloudflare
+cd homelab/cloudflare
 ./cloudflare_ddns.sh
 ```
 
 #### Cron to run periodically (recommended)
 
 ```bash
-cd cloudflare
+cd homelab/cloudflare
 chmod 700 cloudflare_ddns.sh
 crontab -e
 ```
@@ -225,7 +222,7 @@ crontab -e
 Add:
 
 ```bash
-*/5 * * * * /path/to/cloudflare/cloudflare_ddns.sh >/dev/null 2>&1
+*/5 * * * * /path/to/homelab/cloudflare/cloudflare_ddns.sh >/dev/null 2>&1
 ```
 
 This ensures your Cloudflare domains always point to your current IP.
