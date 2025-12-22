@@ -1,7 +1,24 @@
 # ===========================
+# Global HTTP security headers
+# ===========================
+(sec_headers) {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        -Server
+    }
+}
+
+# ===========================
 # Cloudflare DNS
 # ===========================
 (dns_cf) {
+    import sec_headers
+    servers {
+        trusted_proxies cloudflare
+    }
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
@@ -59,13 +76,6 @@
     import dns_cf
 
     encode gzip zstd
-
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy no-referrer
-    }
-
     reverse_proxy adguard:3000
 }
 
@@ -111,14 +121,6 @@
         }
         reverse_proxy @websockets host.docker.internal:10000
         respond 403
-    }
-    
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy no-referrer
-        -Server
     }
 
     respond 404
