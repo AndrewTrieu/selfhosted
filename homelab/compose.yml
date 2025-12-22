@@ -96,7 +96,8 @@ services:
     cap_add:
       - NET_ADMIN
     networks:
-      proxy: {}
+      proxy:
+        ipv4_address: 172.30.0.100
       vpndns:
         ipv4_address: 10.2.0.100
 
@@ -112,7 +113,7 @@ services:
     environment:
       WG_HOST: ${VPN_DOMAIN}
       PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
-      WG_DEFAULT_DNS: 10.2.0.100
+      WG_DEFAULT_DNS: adguard
     volumes:
       - ./services/wg-easy/data:/etc/wireguard
       - /lib/modules:/lib/modules:ro
@@ -126,7 +127,8 @@ services:
       - net.ipv4.ip_forward=1
       - net.ipv4.conf.all.src_valid_mark=1
     networks: 
-      proxy: {}
+      proxy:
+        ipv4_address: 172.30.0.90
       vpndns:
         ipv4_address: 10.2.0.90
 
@@ -176,12 +178,12 @@ services:
       GITEA__database__NAME: gitea
       GITEA__database__USER: gitea
       GITEA__database__PASSWD: ${GITEA_DB_PASSWORD}
+      GITEA__server__SSH_PORT: 22
+      GITEA__server__SSH_LISTEN_PORT: 22
     volumes:
       - ./services/gitea/data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "222:22"
     networks:
       - proxy
 
@@ -236,6 +238,19 @@ services:
       CF_API_TOKEN: ${CF_API_TOKEN}
       EMAIL: ${EMAIL}
       LOG_FILE: /data/access.log
+    networks:
+      - proxy
+
+  # ==========================
+  # Cloudflared (Cloudflare Tunnel)
+  # ==========================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: always
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
     networks:
       - proxy
 
@@ -307,6 +322,9 @@ services:
 networks:
   proxy:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
   vpndns:
     ipam:
       config:

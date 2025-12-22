@@ -28,6 +28,7 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 | **WG-Easy**      | WireGuard VPN with management UI                    | `https://vpn.example.com`       |
 | **3x-ui**        | Xray / V2Ray management panel                       | `https://xui.example.com/admin` |
 | **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”) | `https://git.example.com`       |
+| **Gitea SSH**    | Git-over-SSH via Cloudflare Tunnel + Access         | `ssh.example.com`               |
 | **Caddy**        | Reverse proxy with automatic HTTPS                  | *No direct UI*                  |
 | **Portainer**    | Docker container management                         | `https://<SERVER_IP>:9443`      |
 | **Uptime Kuma**  | Uptime & service monitoring                         | `http://<SERVER_IP>:3001`       |
@@ -54,12 +55,16 @@ flowchart LR
     Client -->|"HTTPS :443"| Cloudflare
     Client -->|Reality TCP :8443| XrayReality
     Client -->|WireGuard UDP :51820| WireGuardVPN
-    Client -->|SSH TCP :222| GiteaSSH
+    Client -->|"SSH (Access)"| Cloudflare
 
     %% =====================
     %% Web & CDN flow
     %% =====================
     Cloudflare -->|"HTTPS"| Caddy
+    Cloudflare -->|"Tunnel"| Cloudflared
+
+    %% SSH tunnel
+    Cloudflared -->|"SSH :22"| GiteaSSH
 
     %% Reverse proxy targets
     Caddy --> Vaultwarden
@@ -84,17 +89,17 @@ flowchart LR
         Vaultwarden
         TwoFAuth
         Filebrowser
-        GiteaSSH
         Unbound
+        Cloudflared
 
         subgraph AdGuardHome["AdGuard Home"]
-            AdGuardDNS["AdGuard DNS (53/TCP,UDP)"]
-            AdGuardUI["AdGuard UI (3000)"]
+            AdGuardDNS["AdGuard DNS (:53/TCP,UDP)"]
+            AdGuardUI["AdGuard UI (:3000)"]
         end
 
         subgraph Gitea["Gitea"]
-            GiteaSSH["Gitea SSH (222/TCP)"]
-            GiteaUI["Gitea UI (3000)"]
+            GiteaSSH["Gitea SSH"]
+            GiteaUI["Gitea UI (:3000)"]
         end
 
         subgraph XUI["3X-UI (Xray Core)"]
@@ -117,12 +122,13 @@ flowchart LR
 
 This homelab intentionally uses multiple access methods, each optimized for a different network environment. Not all traffic is treated equally, and Cloudflare proxying is applied selectively based on protocol requirements and threat model.
 
-| Method                    | Cloudflare  | Protocol      | Purpose                               |
-| ------------------------- | ----------- | ------------- | ------------------------------------- |
-| **VLESS Reality**         | ❌ DNS-only | Raw TCP + TLS | Stealth / censorship-resistant access |
-| **VLESS WebSocket (CDN)** | ✅ Proxied  | HTTP/1.1      | Compatibility / fallback              |
-| **Web UIs**               | ✅ Proxied  | HTTPS         | Normal apps & UIs                     |
-| **WireGuard**             | ❌ DNS-only | UDP / TCP     | Non-HTTP infrastructure               |
+| Method                    | Cloudflare | Protocol         | Purpose                               |
+| ------------------------- | ---------- | ---------------- | ------------------------------------- |
+| **Web UIs**               | ✅ Proxied | HTTPS            | Normal apps & dashboards              |
+| **Gitea SSH**             | ✅ Tunnel  | SSH (TCP/22)     | Secure Git access via Zero Trust      |
+| **VLESS Reality**         | ❌ DNS-only| Raw TCP + TLS    | Stealth / censorship-resistant access |
+| **VLESS WebSocket (CDN)** | ✅ Proxied | HTTP / WebSocket | Compatibility fallback                |
+| **WireGuard**             | ❌ DNS-only| UDP              | Non-HTTP infrastructure               |
 
 ### Cloudflare-proxied domains (orange cloud)
 
@@ -137,11 +143,17 @@ These domains are public-facing HTTP(S) services and benefit from Cloudflare’s
 
 ### DNS-only domains (grey cloud)
 
-These domains are non-HTTP or stealth-oriented services and must bypass Cloudflare entirely.
+WireGuard and Reality must bypass Cloudflare because they are non-HTTP protocols.
 
 - vpn.example.com
   - Wireguard's management UI should not be exposed to the public internet. Think carefully if you want to do this!
 - reality.example.com
+
+### Cloudflare Tunnel domains (no public inbound ports)
+
+These hostnames are reached via **Cloudflare Tunnel** and protected with **Cloudflare Access**. They do not require port forwarding on the router.
+
+- ssh.example.com
 
 ## Directory Structure
 
@@ -172,7 +184,6 @@ ___
 | **HTTP (ACME)**   | **80**    | 80       | TCP     | ✅ Yes    | Redirects + ACME fallback            |
 | **WireGuard VPN** | **51820** | 51820    | UDP     | ✅ Yes    | Main VPN tunnel                      |
 | **Reality**       | 8443      | 8443     | TCP     | ✅ Yes    | XTLS Reality (DNS-only, not proxied) |
-| **Gitea SSH**     | 222       | 222      | TCP     | Optional  | Git over SSH                         |
 
 ___
 
@@ -354,24 +365,104 @@ ___
 
 ### 6. Set your router to use Adguard + Unbound
 
-Set Primary DNS to `<local.server.ip.addr>`. Leave Secondary DNS empty.
+Go to Adguard Home's UI, navigate to ***DNS settings*** and set **Upstream DNS servers** to `10.2.0.53`.
+
+Go to your router's admin UI and set Primary DNS to `<local.server.ip.addr>`. Leave Secondary DNS empty.
 
 Perform a sanity check at [www.dnsleaktest.com](https://www.dnsleaktest.com). If the resolver IP = your ISP IP and NOT Google, Cloudflare, Quad9, etc., it's working.
 
 ___
 
-### 7. Set Gitea's SSH Port to 222
+### 7. Configure Cloudflare Tunnel and Zero Trust for SSH
 
-```bash
-nano /path/to/homelab/services/gitea/data/gitea/conf/app.ini
-```
+#### 7.1. Create the Cloudflare Tunnel
 
-Ensure:
+1. In Cloudflare Dashboard, navigate to ***Zero Trust*** > ***Networks*** > ***Connectors***
+2. Create a new **Cloudflared** tunnel
+3. Give it a name, e.g., `Gitea SSH`
+4. Copy the tunnel token and put it in `.env` as `CF_TUNNEL_TOKEN`
+5. Go to the ***Published hostname routes*** and add a new entry:
 
-```ini
-SSH_PORT = 222
-SSH_LISTEN_PORT = 22
-```
+    | Hostname                  |               |                  |
+    | ------------------------- | ------------- | ---------------- |
+    | *Subdomain*               | *Domain*      | *Path*           |
+    | `ssh`                     | `example.com` |                  |
+
+    | Service                   |               |
+    | ------------------------- | ------------- |
+    | *Type*                    | *URL*         |
+    | `SSH`                     | `gitea:22`    |
+
+6. Update `cloudflared` container with the token:
+
+    ```bash
+    cd homelab
+    docker compose up -d cloudflared
+    ```
+
+#### 7.2. Configure Zero Trust Application Access
+
+1. In Cloudflare Dashboard, navigate to ***Zero Trust*** > ***Access controls*** > ***Applications***
+2. Add a new **Self-hosted** application:
+
+    | Basic information                      |                            |
+    | -------------------------------------- | -------------------------- |
+    | *Application name*                     | *Session duration*         |
+    | `Gitea SSH` or something else you like | 24 hours                   |
+
+    | Public hostname           |               |               |                  |
+    | ------------------------- | ------------- | ------------- | ---------------- |
+    | *Input method*            | *Subdomain*   | *Domain*      | *Path*           |
+    | Default                   | `ssh`         | `example.com` |                  |
+
+3. Add **Access policies** based on your preference
+4. Add some other **Login methods**; do NOT rely on `One-time PIN`
+
+#### 7.3. Configure the Client
+
+1. Install `cloudflared` from the [official release](https://github.com/cloudflare/cloudflared/releases) on the client machine.
+2. Edit `~/.ssh/config`:
+
+    ```ssh
+    Host git.example.com
+    HostName ssh.yourdomain.com
+    User git
+    ProxyCommand cloudflared access ssh --hostname %h
+    IdentityFile ~/.ssh/<your_gitea_private_ssh_key>
+    ```
+
+    > Remember to add the public key to Gitea!
+
+3. Authenticate with Cloudflare
+
+    The first time you connect, a browser window will be opened for authentication:
+
+    ```bash
+    ssh git@git.example.com
+    ```
+
+    You should see:
+
+    ```bash
+    A browser window should have opened for you to authenticate.
+    If it didn't, please visit: https://ssh.example.com/...
+    ```
+
+    The certificate will then be cached locally and valid for the next 24 hours.
+
+4. Verify the tunnel health in Cloudflare Dashboard: <span style="background-color: #2e7d32; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;">HEALTHY</span>
+5. Test the SSH connection:
+
+    ```bash
+    ssh -T git@git.example.com
+    ```
+
+    You should see:
+
+    ```bash
+    Hi there, <username>! You've successfully authenticated with the key named <key_name>, but Gitea does not provide shell access.
+    If this is unexpected, please log in with password and setup Gitea under another user.
+    ```
 
 ___
 
