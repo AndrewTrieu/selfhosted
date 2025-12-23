@@ -9,6 +9,7 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 - Password management & 2FA
 - WireGuard VPN with web UI
 - Network-wide ad & tracker blocking
+- CrowdSec behavior-based security
 - Recursive DNS with Unbound + Redis cachedb
 - Xray / V2Ray management via 3x-ui (panel behind HTTPS)
   - VLESS Reality
@@ -18,22 +19,23 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 - Zero-downtime updates
 - Auto-start on boot
 
-| Service          | Description                                         | Access                          |
-| ---------------- | --------------------------------------------------- | ------------------------------- |
-| **Vaultwarden**  | Bitwarden-compatible password manager               | `https://vault.example.com`     |
-| **2FAuth**       | Self-hosted two-factor authentication manager       | `https://auth.example.com`      |
-| **Filebrowser**  | Lightweight web-based file manager                  | `https://storage.example.com`   |
-| **AdGuard Home** | DNS-level ad & tracker blocking                     | `https://dns.example.com`       |
-| **Unbound**      | Recursive DNS resolver (DNSSEC, Redis cachedb)      | *Internal*                      |
-| **WG-Easy**      | WireGuard VPN with management UI                    | `https://vpn.example.com`       |
-| **3x-ui**        | Xray / V2Ray management panel                       | `https://xui.example.com/admin` |
-| **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”) | `https://git.example.com`       |
-| **Gitea SSH**    | Git-over-SSH via Cloudflare Tunnel + Access         | `ssh.example.com`               |
-| **Caddy**        | Reverse proxy with automatic HTTPS                  | *No direct UI*                  |
-| **Portainer**    | Docker container management                         | `https://<SERVER_IP>:9443`      |
-| **Uptime Kuma**  | Uptime & service monitoring                         | `http://<SERVER_IP>:3001`       |
-| **Dozzle**       | Real-time Docker log viewer                         | `http://<SERVER_IP>:9999`       |
-| **Netdata**      | System & container performance monitoring           | `http://<SERVER_IP>:19999`      |
+| Service          | Description                                               | Access                          |
+| ---------------- | --------------------------------------------------------- | ------------------------------- |
+| **Vaultwarden**  | Bitwarden-compatible password manager                     | `https://vault.example.com`     |
+| **2FAuth**       | Self-hosted two-factor authentication manager             | `https://auth.example.com`      |
+| **Filebrowser**  | Lightweight web-based file manager                        | `https://storage.example.com`   |
+| **AdGuard Home** | DNS-level ad & tracker blocking                           | `https://dns.example.com`       |
+| **Unbound**      | Recursive DNS resolver (DNSSEC, Redis cachedb)            | *Internal*                      |
+| **WG-Easy**      | WireGuard VPN with management UI                          | `https://vpn.example.com`       |
+| **3x-ui**        | Xray / V2Ray management panel                             | `https://xui.example.com/admin` |
+| **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”)       | `https://git.example.com`       |
+| **Gitea SSH**    | Git-over-SSH via Cloudflare Tunnel + Access               | `ssh.example.com`               |
+| **Crowdsec**     | Behavior-based intrusion detection & prevention (IDS/IPS) | *Internal (via Caddy bouncer)*  |
+| **Caddy**        | Reverse proxy with automatic HTTPS                        | *No direct UI*                  |
+| **Portainer**    | Docker container management                               | `https://<SERVER_IP>:9443`      |
+| **Uptime Kuma**  | Uptime & service monitoring                               | `http://<SERVER_IP>:3001`       |
+| **Dozzle**       | Real-time Docker log viewer                               | `http://<SERVER_IP>:9999`       |
+| **Netdata**      | System & container performance monitoring                 | `http://<SERVER_IP>:19999`      |
 
 ## Architecture
 
@@ -41,25 +43,19 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 flowchart LR
     Client["Client Devices"]
 
-    %% =====================
     %% DNS flow
-    %% =====================
     Client -->|"DNS queries"| Router
     Router -->|"DNS"| AdGuardDNS
     AdGuardDNS -->|"Upstream DNS"| Unbound
     Unbound -->|"Recursive queries"| InternetDNS[(Root / Authoritative DNS)]
 
-    %% =====================
     %% Entry points
-    %% =====================
     Client -->|"HTTPS :443"| Cloudflare
     Client -->|Reality TCP :8443| XrayReality
     Client -->|WireGuard UDP :51820| WireGuardVPN
     Client -->|"SSH (Access)"| Cloudflare
 
-    %% =====================
     %% Web & CDN flow
-    %% =====================
     Cloudflare -->|"HTTPS"| Caddy
     Cloudflare -->|"Tunnel"| Cloudflared
 
@@ -75,15 +71,15 @@ flowchart LR
     Caddy --> WGEasyUI["WG-Easy UI"]
     Caddy --> XUIAdmin["3X-UI Admin Panel"]
 
-    %% =====================
+    %% CrowdSec integration
+    Caddy -->|"Access logs (JSON)"| CrowdSec
+    CrowdSec -->|"Ban / Allow decisions"| Caddy
+
     %% VLESS over CDN (WebSocket only)
-    %% =====================
     Cloudflare -->|"WebSocket"| Caddy
     Caddy -->|WebSocket :10000| XrayWS
 
-    %% =====================
     %% Containers
-    %% =====================
     subgraph DockerHost["Docker Host"]
         Caddy
         Vaultwarden
@@ -91,6 +87,7 @@ flowchart LR
         Filebrowser
         Unbound
         Cloudflared
+        CrowdSec
 
         subgraph AdGuardHome["AdGuard Home"]
             AdGuardDNS["AdGuard DNS (:53/TCP,UDP)"]
@@ -291,7 +288,19 @@ If this is not disabled, Docker will fail to start AdGuard Home with an error: `
 
 ___
 
-### 5. Homelab Stack (Docker Compose)
+### 5. Connect Crowdsec and Caddy
+
+1. Generate Crowdsec API key for Caddy:
+
+   ```bash
+   docker exec -it crowdsec cscli bouncers add caddy-bouncer
+   ```
+
+2. Copy the value and put it in `.env` as `CROWDSEC_API_KEY`
+
+___
+
+### 6. Homelab Stack (Docker Compose)
 
 The `homelab/` directory contains everything needed to run the stack.
 
@@ -360,7 +369,7 @@ This will refresh all Docker images with zero downtime.
 
 ___
 
-### 6. Set your router to use Adguard + Unbound
+### 7. Set your router to use Adguard + Unbound
 
 Go to Adguard Home's UI, navigate to ***DNS settings*** and set **Upstream DNS servers** to `10.2.0.53`.
 
@@ -370,9 +379,9 @@ Perform a sanity check at [www.dnsleaktest.com](https://www.dnsleaktest.com). If
 
 ___
 
-### 7. Configure Cloudflare Tunnel and Zero Trust for SSH
+### 8. Configure Cloudflare Tunnel and Zero Trust for SSH
 
-#### 7.1. Create the Cloudflare Tunnel
+#### 8.1. Create the Cloudflare Tunnel
 
 1. In Cloudflare Dashboard, navigate to ***Zero Trust*** > ***Networks*** > ***Connectors***
 2. Create a new **Cloudflared** tunnel
@@ -397,7 +406,7 @@ ___
     docker compose up -d cloudflared
     ```
 
-#### 7.2. Configure Zero Trust Application Access
+#### 8.2. Configure Zero Trust Application Access
 
 1. In Cloudflare Dashboard, navigate to ***Zero Trust*** > ***Access controls*** > ***Applications***
 2. Add a new **Self-hosted** application:
@@ -415,7 +424,7 @@ ___
 3. Add **Access policies** based on your preference
 4. Add some other **Login methods**; do NOT rely on `One-time PIN`
 
-#### 7.3. Configure the Client
+#### 8.3. Configure the Client
 
 1. Install `cloudflared` from the [official release](https://github.com/cloudflare/cloudflared/releases) on the client machine.
 2. Edit `~/.ssh/config`:
@@ -461,9 +470,10 @@ ___
     If this is unexpected, please log in with password and setup Gitea under another user.
     ```
 
+> You will need to authenticate yourself again after 24 hours.
 ___
 
-### 8. Configure 3X-UI for Reverse Proxy
+### 9. Configure 3X-UI for Reverse Proxy
 
 1. Navigate to `http://<local.server.ip.addr>:2053` and log in with:
 
@@ -478,7 +488,7 @@ ___
 
 ___
 
-### 9. Note on Xray inbounds' Configs
+### 10. Note on Xray inbounds' Configs
 
 #### Server
 
@@ -494,8 +504,14 @@ ___
 | **Reality**   | `reality.example.com` | `8443` | Reality | `tcp`   | `xtls-rprx-vision` | N/A                | Fake SNI (e.g. `apple.com`) | Stealth / censorship |
 | **WebSocket** | `xui.example.com`     | `443`  | TLS     | `ws`    | N/A                | `/ws`              | `xui.example.com`           | Fallback             |
 
+___
+
+## Migrate to a New Server
+
+TODO
+___
+
 ## Future roadmap
 
-- Add CrowdSec for adaptive intrusion protection  
 - Add ZFS for data integrity and snapshots (if I can afford the hardware)
 - Add UPS for graceful shutdown and storage safety (unlikely to happen)

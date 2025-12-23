@@ -236,8 +236,36 @@ services:
       XUI_DOMAIN: ${XUI_DOMAIN}
       REALITY_DOMAIN: ${REALITY_DOMAIN}
       CF_API_TOKEN: ${CF_API_TOKEN}
+      CROWDSEC_API_KEY: ${CROWDSEC_API_KEY}
       EMAIL: ${EMAIL}
       LOG_FILE: /data/access.log
+    networks:
+      - proxy
+
+  # ==========================
+  # CrowdSec (Security agent)
+  # ==========================
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    restart: always
+    depends_on:
+      - caddy
+    environment:
+      COLLECTIONS: >
+        crowdsecurity/caddy
+        crowdsecurity/linux
+        crowdsecurity/sshd
+        crowdsecurity/http-cve
+        crowdsecurity/base-http-scenarios
+        crowdsecurity/whitelist-good-actors
+        crowdsecurity/appsec-virtual-patching
+      GID: "1000"
+    volumes:
+      - ./services/crowdsec/data:/var/lib/crowdsec/data
+      - ./services/crowdsec/config:/etc/crowdsec
+      - ./services/crowdsec/acquis.d:/etc/crowdsec/acquis.d
+      - ./services/caddy/data:/var/log/caddy:ro
     networks:
       - proxy
 

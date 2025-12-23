@@ -1,3 +1,16 @@
+{
+    order crowdsec first
+
+    crowdsec {
+        api_url http://crowdsec:8080
+        api_key {env.CROWDSEC_API_KEY}
+    }
+
+    servers {
+        trusted_proxies cloudflare
+    }
+}
+
 # ===========================
 # Global HTTP security headers
 # ===========================
@@ -15,17 +28,23 @@
 # Cloudflare DNS
 # ===========================
 (dns_cf) {
-    import sec_headers
-    servers {
-        trusted_proxies cloudflare
-    }
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
     log {
         output file {env.LOG_FILE}
-        format console
+        format json
     }
+}
+
+# ===========================
+# Common configuration for all sites
+# ===========================
+(common_config) {
+    import sec_headers
+    import dns_cf
+    crowdsec
+    encode gzip zstd
 }
 
 # ===========================
@@ -33,9 +52,7 @@
 # Default landing page. Do something more useful here if desired.
 # ===========================
 {env.ROOT_DOMAIN} {
-    import dns_cf
-
-    encode gzip zstd
+    import common_config
     respond 200 "Welcome to {env.ROOT_DOMAIN}!\n"
 }
 
@@ -43,9 +60,7 @@
 # Vaultwarden
 # ===========================
 {env.VAULT_DOMAIN} {
-    import dns_cf
-
-    encode gzip zstd
+    import common_config
     reverse_proxy vaultwarden:80
 }
 
@@ -53,9 +68,7 @@
 # 2FAuth
 # ===========================
 {env.AUTH_DOMAIN} {
-    import dns_cf
-
-    encode gzip zstd
+    import common_config
     reverse_proxy 2fauth:8000
 }
 
@@ -63,9 +76,7 @@
 # Filebrowser
 # ===========================
 {env.STORAGE_DOMAIN} {
-    import dns_cf
-
-    encode gzip zstd
+    import common_config
     reverse_proxy filebrowser:80
 }
 
@@ -73,9 +84,7 @@
 # Adguard Home
 # ===========================
 {env.DNS_DOMAIN} {
-    import dns_cf
-
-    encode gzip zstd
+    import common_config
     reverse_proxy adguard:3000
 }
 
@@ -84,9 +93,7 @@
 # Warning: Exposes your VPN management interface to the internet. Consider removing this section if not needed.
 # ===========================
 {env.VPN_DOMAIN} {
-    import dns_cf
-
-    encode gzip zstd
+    import common_config
     reverse_proxy wg-easy:51821
 }
 
@@ -94,9 +101,7 @@
 # Gitea
 # ===========================
 {env.GIT_DOMAIN} {
-    import dns_cf
-
-    encode gzip zstd
+    import common_config
     reverse_proxy gitea:3000
 }
 
@@ -104,12 +109,13 @@
 # 3X-UI
 # ===========================
 {env.XUI_DOMAIN} {
+    import sec_headers
     import dns_cf
-
     encode gzip zstd
 
     # ---- X-UI admin panel ----
     route /admin* {
+        crowdsec
         reverse_proxy host.docker.internal:2053
     }
 
@@ -130,8 +136,8 @@
 # Reality Domain - Block all traffic on HTTP/HTTPS
 # ===========================
 {env.REALITY_DOMAIN} {
+    import sec_headers
     import dns_cf
-
     encode gzip zstd
 
     @any {
