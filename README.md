@@ -37,6 +37,44 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 | **Dozzle**       | Real-time Docker log viewer                               | `http://<SERVER_IP>:9999`       |
 | **Netdata**      | System & container performance monitoring                 | `http://<SERVER_IP>:19999`      |
 
+## Table of Contents
+
+- [Homelab Setup](#homelab-setup)
+  - [Table of Contents](#table-of-contents)
+  - [Architecture](#architecture)
+  - [DNS \& Proxy Model](#dns--proxy-model)
+    - [Cloudflare-proxied domains (orange cloud)](#cloudflare-proxied-domains-orange-cloud)
+    - [DNS-only domains (grey cloud)](#dns-only-domains-grey-cloud)
+    - [Cloudflare Tunnel domains (no public inbound ports)](#cloudflare-tunnel-domains-no-public-inbound-ports)
+  - [Directory Structure](#directory-structure)
+  - [Instructions](#instructions)
+    - [0. Port Forwarding on Your Router](#0-port-forwarding-on-your-router)
+    - [1. Secrets and Environment Variables](#1-secrets-and-environment-variables)
+    - [2. Cloudflare Dynamic DNS Updater](#2-cloudflare-dynamic-dns-updater)
+      - [Run manually if needed](#run-manually-if-needed)
+      - [Cron to run periodically (recommended)](#cron-to-run-periodically-recommended)
+    - [3. Update `root.hints` for Unbound](#3-update-roothints-for-unbound)
+    - [4. Host Requirement: Disable `systemd-resolved` DNS Stub (Port 53)](#4-host-requirement-disable-systemd-resolved-dns-stub-port-53)
+    - [5. Connect Crowdsec and Caddy](#5-connect-crowdsec-and-caddy)
+    - [6. Homelab Stack (Docker Compose)](#6-homelab-stack-docker-compose)
+      - [Start the stack](#start-the-stack)
+      - [Stop the stack](#stop-the-stack)
+      - [View logs](#view-logs)
+      - [Auto-start on system boot](#auto-start-on-system-boot)
+      - [Set correct permissions for volumes (optional)](#set-correct-permissions-for-volumes-optional)
+      - [Updating](#updating)
+    - [7. Set your router to use Adguard + Unbound](#7-set-your-router-to-use-adguard--unbound)
+    - [8. Configure Cloudflare Tunnel and Zero Trust for SSH](#8-configure-cloudflare-tunnel-and-zero-trust-for-ssh)
+      - [8.1. Create the Cloudflare Tunnel](#81-create-the-cloudflare-tunnel)
+      - [8.2. Configure Zero Trust Application Access](#82-configure-zero-trust-application-access)
+      - [8.3. Configure the Client](#83-configure-the-client)
+    - [9. Configure 3X-UI for Reverse Proxy](#9-configure-3x-ui-for-reverse-proxy)
+    - [10. Note on Xray inbounds' Configs](#10-note-on-xray-inbounds-configs)
+      - [Server](#server)
+      - [Client](#client)
+  - [Migrate to a New Server](#migrate-to-a-new-server)
+  - [Future roadmap](#future-roadmap)
+
 ## Architecture
 
 ```mermaid
