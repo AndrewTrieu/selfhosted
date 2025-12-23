@@ -7,7 +7,7 @@ services:
     container_name: vaultwarden
     restart: always
     volumes:
-      - ./services/vaultwarden:/data
+      - ${HOMELAB_ROOT}/homelab/services/vaultwarden:/data
     environment:
       DOMAIN: "https://${VAULT_DOMAIN}"
     networks:
@@ -21,7 +21,7 @@ services:
     container_name: 2fauth
     restart: always
     volumes:
-      - ./services/2fauth:/data
+      - ${HOMELAB_ROOT}/homelab/services/2fauth:/data
     environment:
       APP_NAME: 2FAuth
       APP_ENV: production
@@ -45,9 +45,9 @@ services:
     container_name: filebrowser
     restart: always
     volumes:
-      - ./services/filebrowser/srv:/srv
-      - ./services/filebrowser/database:/database
-      - ./services/filebrowser/config:/config
+      - ${HOMELAB_ROOT}/homelab/services/filebrowser/srv:/srv
+      - ${HOMELAB_ROOT}/homelab/services/filebrowser/database:/database
+      - ${HOMELAB_ROOT}/homelab/services/filebrowser/config:/config
     user: "1000:1000"
     networks:
       - proxy
@@ -61,7 +61,7 @@ services:
     hostname: redis
     restart: unless-stopped
     volumes:
-      - ./services/unbound/redis:/data
+      - ${HOMELAB_ROOT}/homelab/services/unbound/redis:/data
     networks:
       - vpndns
 
@@ -72,8 +72,8 @@ services:
     depends_on:
       - unbound-redis
     volumes:
-    - ./services/unbound/custom.conf.d:/etc/unbound/custom.conf.d:ro
-    - ./services/unbound/root.hints:/etc/unbound/root.hints:ro
+    - ${HOMELAB_ROOT}/homelab/services/unbound/custom.conf.d:/etc/unbound/custom.conf.d:ro
+    - ${HOMELAB_ROOT}/homelab/services/unbound/root.hints:/etc/unbound/root.hints:ro
     networks:
       vpndns:
         ipv4_address: 10.2.0.53
@@ -91,8 +91,8 @@ services:
       - "53:53/tcp"
       - "53:53/udp"
     volumes:
-      - ./services/adguard/work:/opt/adguardhome/work
-      - ./services/adguard/conf:/opt/adguardhome/conf
+      - ${HOMELAB_ROOT}/homelab/services/adguard/work:/opt/adguardhome/work
+      - ${HOMELAB_ROOT}/homelab/services/adguard/conf:/opt/adguardhome/conf
     cap_add:
       - NET_ADMIN
     networks:
@@ -115,7 +115,7 @@ services:
       PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
       WG_DEFAULT_DNS: adguard
     volumes:
-      - ./services/wg-easy/data:/etc/wireguard
+      - ${HOMELAB_ROOT}/homelab/services/wg-easy/data:/etc/wireguard
       - /lib/modules:/lib/modules:ro
     ports:
       - "51820:51820/udp"
@@ -139,8 +139,8 @@ services:
     image: ghcr.io/mhsanaei/3x-ui:latest
     container_name: 3xui_app
     volumes:
-      - ./services/3x-ui/db:/etc/x-ui
-      - ./services/3x-ui/cert:/root/cert
+      - ${HOMELAB_ROOT}/homelab/services/3x-ui/db:/etc/x-ui
+      - ${HOMELAB_ROOT}/homelab/services/3x-ui/cert:/root/cert
     environment:
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
@@ -160,7 +160,7 @@ services:
       POSTGRES_PASSWORD: ${GITEA_DB_PASSWORD}
       POSTGRES_DB: gitea
     volumes:
-      - ./services/gitea/postgres:/var/lib/postgresql/data
+      - ${HOMELAB_ROOT}/homelab/services/gitea/postgres:/var/lib/postgresql/data
     networks:
       - proxy
 
@@ -181,7 +181,7 @@ services:
       GITEA__server__SSH_PORT: 22
       GITEA__server__SSH_LISTEN_PORT: 22
     volumes:
-      - ./services/gitea/data:/data
+      - ${HOMELAB_ROOT}/homelab/services/gitea/data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     networks:
@@ -194,8 +194,8 @@ services:
     depends_on:
       - gitea
     volumes:
-      - ./services/gitea/runner/config.yaml:/config.yaml:ro
-      - ./services/gitea/runner/data:/data
+      - ${HOMELAB_ROOT}/homelab/services/gitea/runner/config.yaml:/config.yaml:ro
+      - ${HOMELAB_ROOT}/homelab/services/gitea/runner/data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       CONFIG_FILE: /config.yaml
@@ -222,9 +222,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./services/caddy/config:/config
-      - ./services/caddy/data:/data
+      - ${HOMELAB_ROOT}/homelab/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${HOMELAB_ROOT}/homelab/services/caddy/config:/config
+      - ${HOMELAB_ROOT}/homelab/services/caddy/data:/data
     environment:
       ROOT_DOMAIN: ${ROOT_DOMAIN}
       VAULT_DOMAIN: ${VAULT_DOMAIN}
@@ -262,10 +262,10 @@ services:
         crowdsecurity/appsec-virtual-patching
       GID: "1000"
     volumes:
-      - ./services/crowdsec/data:/var/lib/crowdsec/data
-      - ./services/crowdsec/config:/etc/crowdsec
-      - ./services/crowdsec/acquis.d:/etc/crowdsec/acquis.d
-      - ./services/caddy/data:/var/log/caddy:ro
+      - ${HOMELAB_ROOT}/homelab/services/crowdsec/data:/var/lib/crowdsec/data
+      - ${HOMELAB_ROOT}/homelab/services/crowdsec/config:/etc/crowdsec
+      - ${HOMELAB_ROOT}/homelab/services/crowdsec/acquis.d:/etc/crowdsec/acquis.d
+      - ${HOMELAB_ROOT}/homelab/services/caddy/data:/var/log/caddy:ro
     networks:
       - proxy
 
@@ -293,7 +293,7 @@ services:
       - 9443:9443
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./services/portainer:/data
+      - ${HOMELAB_ROOT}/homelab/services/portainer:/data
 
   # ==========================
   # Uptime Kuma (uptime monitor)
@@ -305,7 +305,7 @@ services:
     ports:
       - 3001:3001
     volumes:
-      - ./services/uptimekuma:/app/data
+      - ${HOMELAB_ROOT}/homelab/services/uptimekuma:/app/data
 
   # ==========================
   # Dozzle (live logs viewer)
@@ -334,9 +334,9 @@ services:
     security_opt:
       - apparmor:unconfined
     volumes:
-      - ./services/netdata/config:/etc/netdata
-      - ./services/netdata/lib:/var/lib/netdata
-      - ./services/netdata/cache:/var/cache/netdata
+      - ${HOMELAB_ROOT}/homelab/services/netdata/config:/etc/netdata
+      - ${HOMELAB_ROOT}/homelab/services/netdata/lib:/var/lib/netdata
+      - ${HOMELAB_ROOT}/homelab/services/netdata/cache:/var/cache/netdata
       - /:/host/root:ro,rslave
       - /etc/passwd:/host/etc/passwd:ro
       - /etc/group:/host/etc/group:ro

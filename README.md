@@ -157,13 +157,18 @@ These hostnames are reached via **Cloudflare Tunnel** and protected with **Cloud
 ```bash
 .
 ├── homelab
-│   ├── compose.yml              # Docker Compose stack
 │   ├── Caddyfile                # Caddy reverse proxy configuration
-│   ├── Dockerfile               # Custom Caddy build (Cloudflare DNS plugin)
-│   ├── .env.example             # Shared environment variable template
 │   ├── cloudflare
-│   │   └── cloudflare-ddns.sh   # Cloudflare Dynamic DNS updater
+│   │   └── cloudflare_ddns.sh   # Cloudflare Dynamic DNS updater
+│   ├── compose.yml              # Docker Compose stack
+│   ├── Dockerfile               # Custom Caddy build
 │   └── services
+│       ├── crowdsec
+│       │   └── acquis.d
+│       │       └── caddy.yml    # Crowdsec's Caddy configuration
+│       ├── gitea
+│       │   └── runner
+│       │       └── config.yaml  # Gitea Runner configuration
 │       └── unbound
 │           ├── custom.conf.d    # Unbound modular configuration
 │           └── root.hints
@@ -204,14 +209,14 @@ The script creates or updates all domains used by the homelab.
 #### Run manually if needed
 
 ```bash
-cd homelab/cloudflare
+cd /path/to/homelab/cloudflare
 ./cloudflare_ddns.sh
 ```
 
 #### Cron to run periodically (recommended)
 
 ```bash
-cd homelab/cloudflare
+cd /path/to/homelab/cloudflare
 chmod 700 cloudflare_ddns.sh
 crontab -e
 ```
@@ -307,14 +312,14 @@ The `homelab/` directory contains everything needed to run the stack.
 #### Start the stack
 
 ```bash
-cd homelab
+cd /path/to/homelab
 docker compose up -d
 ```
 
 #### Stop the stack
 
 ```bash
-cd homelab
+cd /path/to/homelab
 docker compose down
 ```
 
@@ -343,7 +348,7 @@ sudo systemctl enable docker
 Run:
 
 ```bash
-cd homelab
+cd /path/to/homelab
 sudo chown -R 1000:1000 services
 sudo chmod -R 755 services
 ```
@@ -351,7 +356,7 @@ sudo chmod -R 755 services
 Then restart the containers:
 
 ```bash
-cd homelab
+cd /path/to/homelab
 docker compose restart
 ```
 
@@ -360,7 +365,7 @@ docker compose restart
 To update to the latest versions:
 
 ```bash
-cd homelab
+cd /path/to/homelab
 docker compose pull
 docker compose up -d
 ```
@@ -402,7 +407,7 @@ ___
 6. Update `cloudflared` container with the token:
 
     ```bash
-    cd homelab
+    cd /path/to/homelab
     docker compose up -d cloudflared
     ```
 
@@ -508,10 +513,62 @@ ___
 
 ## Migrate to a New Server
 
-TODO
+1. Prepare the new server
+
+   - Install Docker & Docker Compose
+   - Create the same user and directory structure
+   - Ensure required ports are available (see port forwarding table above)
+   - Set the correct timezone
+
+2. Clone this repository
+3. Restore environment variables
+
+    Copy your .env file from the old server:
+
+    ```bash
+    scp .env user@new-server:/path/to/homelab/.env
+    ```
+
+4. Restore persistent data (volumes)
+
+    Copy service data directories from the old server:
+
+    ```bash
+    rsync -avz --numeric-ids --progress /old/path/to/homelab/ user@new-server:/new/path/to/homelab/
+    ```
+
+    > Make sure containers are stopped on the old server during this step to avoid data corruption!
+
+5. (Optional) Gitea's PostgreSQL database might need to be migrated separately using `pg-dump`
+
+    On the old server:
+
+    ```bash
+    cd /old/path/to/homelab
+    docker compose stop gitea
+    docker exec -t gitea-db pg_dump -U gitea gitea > gitea.sql
+    ```
+
+    On the new server:
+
+    ```bash
+    scp  user@new-server:/old/path/to/homelab/gitea.sql /new/path/to/homelab/gitea.sql
+    cd /new/path/to/homelab/
+    docker exec -i gitea-db psql -U gitea gitea < gitea.sql
+    ```
+
+6. Start the stack
+7. Decommission the old server
+
 ___
 
 ## Future roadmap
 
-- Add ZFS for data integrity and snapshots (if I can afford the hardware)
-- Add UPS for graceful shutdown and storage safety (unlikely to happen)
+1. Auth gateway (OIDC / SSO) in front of all services
+2. Cockpit for interactive system control
+3. Home Assistant for smart home devices (I hate big techs)
+4. Jellyfin with GPU
+5. ZFS for data integrity and snapshots (if I can afford the hardware)
+6. Ollama to make Home Assistant smarter
+7. Grafana for long-term metric aggregation
+8. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
