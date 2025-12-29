@@ -218,12 +218,12 @@ ___
 
 ### 0. Port Forwarding on Your Router
 
-| Purpose           | External  | Internal | Proto   | Required  | Notes                                |
-| ----------------- | --------- | -------- | ------- | --------- | ------------------------------------ |
-| **HTTPS (Caddy)** | **443**   | 443      | TCP/UDP | ✅ Yes    | HTTP/3 (QUIC) supported              |
-| **HTTP (ACME)**   | **80**    | 80       | TCP     | ✅ Yes    | Redirects + ACME fallback            |
-| **WireGuard VPN** | **51820** | 51820    | UDP     | ✅ Yes    | Main VPN tunnel                      |
-| **Reality**       | 8443      | 8443     | TCP     | ✅ Yes    | XTLS Reality (DNS-only, not proxied) |
+| Purpose           | External  | Internal | Proto   | Notes                                |
+| ----------------- | --------- | -------- | ------- | ------------------------------------ |
+| **HTTPS (Caddy)** | **443**   | 443      | TCP/UDP | HTTP/3 (QUIC) supported              |
+| **HTTP (ACME)**   | **80**    | 80       | TCP     | Redirects + ACME fallback            |
+| **WireGuard VPN** | **51820** | 51820    | UDP     | Main VPN tunnel                      |
+| **Reality**       | 8443      | 8443     | TCP     | XTLS Reality (DNS-only, not proxied) |
 
 ___
 

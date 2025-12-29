@@ -29,8 +29,8 @@ services:
       APP_TIMEZONE: UTC
       SITE_OWNER: ${EMAIL}      
       APP_KEY:  ${TWOFAUTH_APP_KEY}
-      APP_URL: "https://${AUTH_DOMAIN}"
-      ASSET_URL: "https://${AUTH_DOMAIN}"
+      APP_URL: "https://${TWOFAUTH_DOMAIN}"
+      ASSET_URL: "https://${TWOFAUTH_DOMAIN}"
       TRUSTED_PROXIES: '*'
       LOG_CHANNEL: daily
       LOG_LEVEL: notice
@@ -111,7 +111,7 @@ services:
     depends_on:
       - adguard
     environment:
-      WG_HOST: ${VPN_DOMAIN}
+      WG_HOST: ${WG_DOMAIN}
       PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
       WG_DEFAULT_DNS: adguard
     volumes:
@@ -228,9 +228,9 @@ services:
     environment:
       ROOT_DOMAIN: ${ROOT_DOMAIN}
       VAULT_DOMAIN: ${VAULT_DOMAIN}
-      AUTH_DOMAIN: ${AUTH_DOMAIN}
+      TWOFAUTH_DOMAIN: ${TWOFAUTH_DOMAIN}
       STORAGE_DOMAIN: ${STORAGE_DOMAIN}
-      VPN_DOMAIN: ${VPN_DOMAIN}
+      WG_DOMAIN: ${WG_DOMAIN}
       GIT_DOMAIN: ${GIT_DOMAIN}
       DNS_DOMAIN: ${DNS_DOMAIN}
       XUI_DOMAIN: ${XUI_DOMAIN}

@@ -67,7 +67,7 @@
 # ===========================
 # 2FAuth
 # ===========================
-{env.AUTH_DOMAIN} {
+{env.TWOFAUTH_DOMAIN} {
     import common_config
     reverse_proxy 2fauth:8000
 }
@@ -92,7 +92,7 @@
 # WireGuard VPN
 # Warning: Exposes your VPN management interface to the internet. Consider removing this section if not needed.
 # ===========================
-{env.VPN_DOMAIN} {
+{env.WG_DOMAIN} {
     import common_config
     reverse_proxy wg-easy:51821
 }

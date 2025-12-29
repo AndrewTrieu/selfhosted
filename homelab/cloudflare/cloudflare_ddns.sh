@@ -12,7 +12,7 @@ DOMAIN="example.com"
 PROXIED_ON=(
   "@"
   "vault"
-  "auth"
+  "2fa"
   "cloud"
   "git"
   "xui"
@@ -21,7 +21,7 @@ PROXIED_ON=(
 
 # Cloudflare PROXIED = false (DNS only)
 PROXIED_OFF=(
-  "vpn"
+  "wg"
   "reality"
 )
 
