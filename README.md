@@ -1,8 +1,8 @@
 # Homelab Setup
 
-This repository contains the configuration for my personal homelab stack, built with Docker Compose and fronted by Caddy as a secure reverse proxy.
+This repository contains the configuration for my personal homelab stack, built with Docker Compose, fronted by Caddy as a secure reverse proxy, and backed by ZFS for storage integrity and snapshots.
 
-The goal of this setup is to be simple, secure, and easy to maintain, while providing essential self-hosted services for daily use.
+The goal of this setup is to be simple, secure, resilient, and easy to maintain, while providing essential self-hosted services for daily use.
 
 - Automatic HTTPS (Caddy + ACME + DNS-01)
 - Dynamic DNS with Cloudflare
@@ -13,10 +13,12 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 - Recursive DNS with Unbound + Redis cachedb
 - Xray / V2Ray management via 3x-ui (panel behind HTTPS)
   - VLESS Reality
-  - VLESS Websocket Cloudflare-proxied
+  - VLESS WebSocket Cloudflare-proxied
 - Fully containerized (Docker Compose)
+- ZFS-backed persistent storage with mirrored disks
+- Per-service datasets for important stateful services
+- Snapshots for rollback and safer upgrades
 - Monitoring, logs, and uptime checks
-- Zero-downtime updates
 - Auto-start on boot
 
 | Service          | Description                                               | Access                          |
@@ -28,7 +30,7 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
 | **Unbound**      | Recursive DNS resolver (DNSSEC, Redis cachedb)            | *Internal*                      |
 | **WG-Easy**      | WireGuard VPN with management UI                          | `https://vpn.example.com`       |
 | **3x-ui**        | Xray / V2Ray management panel                             | `https://xui.example.com/admin` |
-| **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”)       | `https://git.example.com`       |
+| **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”)      | `https://git.example.com`       |
 | **Gitea SSH**    | Git-over-SSH via Cloudflare Tunnel + Access               | `ssh.example.com`               |
 | **Crowdsec**     | Behavior-based intrusion detection & prevention (IDS/IPS) | *Internal (via Caddy bouncer)*  |
 | **Caddy**        | Reverse proxy with automatic HTTPS                        | *No direct UI*                  |
@@ -48,7 +50,8 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
     - [Cloudflare Tunnel domains (no public inbound ports)](#cloudflare-tunnel-domains-no-public-inbound-ports)
   - [Directory Structure](#directory-structure)
   - [Instructions](#instructions)
-    - [0. Port Forwarding on Your Router](#0-port-forwarding-on-your-router)
+    - [0A. Port Forwarding on Your Router](#0a-port-forwarding-on-your-router)
+    - [0B. Setting up ZFS](#0b-setting-up-zfs)
     - [1. Secrets and Environment Variables](#1-secrets-and-environment-variables)
     - [2. Cloudflare Dynamic DNS Updater](#2-cloudflare-dynamic-dns-updater)
       - [Run manually if needed](#run-manually-if-needed)
@@ -72,7 +75,11 @@ The goal of this setup is to be simple, secure, and easy to maintain, while prov
     - [10. Note on Xray inbounds' Configs](#10-note-on-xray-inbounds-configs)
       - [Server](#server)
       - [Client](#client)
-  - [Migrate to a New Server](#migrate-to-a-new-server)
+  - [Migrate to new server + new disks](#migrate-to-new-server--new-disks)
+  - [Migrate to new server + 4 old disks](#migrate-to-new-server--4-old-disks)
+  - [ZFS Maintenance: Scrub and Resilver](#zfs-maintenance-scrub-and-resilver)
+    - [Scrubbing the Pool](#scrubbing-the-pool)
+    - [Resilvering (Disk Replacement)](#resilvering-disk-replacement)
   - [Future roadmap](#future-roadmap)
 
 ## Architecture
@@ -192,6 +199,11 @@ These hostnames are reached via **Cloudflare Tunnel** and protected with **Cloud
 
 ## Directory Structure
 
+The homelab uses a split layout:
+
+- `/opt/homelab` stores Docker Compose, reverse proxy config, scripts, and other project files
+- `/tank/services` stores persistent service data on ZFS
+
 ```bash
 .
 ├── homelab
@@ -216,7 +228,7 @@ ___
 
 ## Instructions
 
-### 0. Port Forwarding on Your Router
+### 0A. Port Forwarding on Your Router
 
 | Purpose           | External  | Internal | Proto   | Notes                                |
 | ----------------- | --------- | -------- | ------- | ------------------------------------ |
@@ -227,12 +239,107 @@ ___
 
 ___
 
+### 0B. Setting up ZFS
+
+1. Install ZFS:
+
+   ```bash
+   sudo apt install zfsutils-linux
+   whereis zfs
+   ```
+
+2. List stable disk IDs:
+
+   ```bash
+   ls -l /dev/disk/by-id/ | grep -E '<E.g., Samsung, Kingston, Crucial, etc.'
+   ```
+
+3. Create two mirrored vdevs built from four disks:
+
+   ```bash
+   sudo zpool create -f \
+     -o ashift=12 \
+     -O compression=lz4 \
+     -O atime=off \
+     -O xattr=sa \
+     -O acltype=posixacl \
+     -O dnodesize=auto \
+     -O mountpoint=/tank \
+     tank \
+     mirror /dev/disk/by-id/<disk_a> \
+           /dev/disk/by-id/<disk_b> \
+     mirror /dev/disk/by-id/<disk_c> \
+           /dev/disk/by-id/<disk_d>
+   ```
+
+4. Enable automatic SSD trim:
+
+   ```bash
+   sudo zpool set autotrim=on tank
+   ```
+
+5. Verify the pool:
+
+   ```bash
+   zpool status
+   zpool list
+   zfs list
+   ```
+
+6. Create datasets:
+
+   ```bash
+   sudo zfs create tank/services
+   sudo zfs create tank/services/2fauth
+   sudo zfs create tank/services/3x-ui
+   sudo zfs create tank/services/adguard
+   sudo zfs create tank/services/caddy
+   sudo zfs create tank/services/crowdsec
+   sudo zfs create tank/services/dozzle
+   sudo zfs create tank/services/filebrowser
+   sudo zfs create tank/services/gitea
+   sudo zfs create tank/services/gitea/postgres
+   sudo zfs create tank/services/portainer
+   sudo zfs create tank/services/unbound
+   sudo zfs create tank/services/unbound/redis
+   sudo zfs create tank/services/vaultwarden
+   sudo zfs create tank/services/wg-easy
+   ```
+
+   For PostgreSQL and Redis, use a smaller record size:
+
+   ```bash
+   sudo zfs set recordsize=16K tank/services/gitea/postgres
+   sudo zfs set recordsize=16K tank/services/unbound/redis
+   ```
+
+7. Enable automatic snapshots:
+
+   ```bash
+   sudo apt install zfs-auto-snapshot
+   ```
+
+8. Copy configs to ZFS:
+
+   ```bash
+   sudo mkdir -p /tank/services/crowdsec/acquis.d
+   sudo mkdir -p /tank/services/gitea/runner
+   sudo mkdir -p /tank/services/unbound/custom.conf.d
+
+   sudo cp /opt/homelab/services/crowdsec/acquis.d/caddy.yml /tank/services/crowdsec/acquis.d/
+   sudo cp /opt/homelab/services/gitea/runner/config.yaml /tank/services/gitea/runner/
+   sudo cp /opt/homelab/services/unbound/custom.conf.d/cachedb.conf /tank/services/unbound/custom.conf.d/
+   sudo cp /opt/homelab/services/unbound/root.hints /tank/services/unbound/
+   ```
+
+___
+
 ### 1. Secrets and Environment Variables
 
 Before running the stack, set environment variables:
 
    ```bash
-   cp homelab/.env.example homelab/.env
+   cp /opt/homelab/.env.example homelab/.env
    ```
 
 You MUST replace all placeholder values!
@@ -247,14 +354,14 @@ The script creates or updates all domains used by the homelab.
 #### Run manually if needed
 
 ```bash
-cd /path/to/homelab/cloudflare
+cd /opt/homelab/cloudflare
 ./cloudflare_ddns.sh
 ```
 
 #### Cron to run periodically (recommended)
 
 ```bash
-cd /path/to/homelab/cloudflare
+cd /opt/homelab/cloudflare
 chmod 700 cloudflare_ddns.sh
 crontab -e
 ```
@@ -262,7 +369,7 @@ crontab -e
 Add:
 
 ```bash
-*/5 * * * * /path/to/homelab/cloudflare/cloudflare_ddns.sh >/dev/null 2>&1
+*/5 * * * * /opt/homelab/cloudflare/cloudflare_ddns.sh >/dev/null 2>&1
 ```
 
 This ensures your Cloudflare domains always point to your current IP.
@@ -280,9 +387,11 @@ crontab -e
 Add:
 
 ```bash
-0 3 1 1 * cd /path/to/homelab/services/unbound && \
-curl -fsS -o root.hints https://www.internic.net/domain/named.root && \
-cd /path/to/homelab && docker compose restart unbound
+0 3 1 1 * \
+cd /tank/services/unbound && \
+curl -fsS -o root.hints.new https://www.internic.net/domain/named.root && \
+mv root.hints.new root.hints && \
+cd /opt/homelab && docker compose restart unbound
 ```
 
 ___
@@ -345,19 +454,19 @@ ___
 
 ### 6. Homelab Stack (Docker Compose)
 
-The `homelab/` directory contains everything needed to run the stack.
+The `/opt/homelab/` directory contains everything needed to run the stack.
 
 #### Start the stack
 
 ```bash
-cd /path/to/homelab
+cd /opt/homelab
 docker compose up -d
 ```
 
 #### Stop the stack
 
 ```bash
-cd /path/to/homelab
+cd /opt/homelab
 docker compose down
 ```
 
@@ -386,7 +495,7 @@ sudo systemctl enable docker
 Run:
 
 ```bash
-cd /path/to/homelab
+cd /opt/homelab
 sudo chown -R 1000:1000 services
 sudo chmod -R 755 services
 ```
@@ -394,7 +503,7 @@ sudo chmod -R 755 services
 Then restart the containers:
 
 ```bash
-cd /path/to/homelab
+cd /opt/homelab
 docker compose restart
 ```
 
@@ -403,7 +512,7 @@ docker compose restart
 To update to the latest versions:
 
 ```bash
-cd /path/to/homelab
+cd /opt/homelab
 docker compose pull
 docker compose up -d
 ```
@@ -445,7 +554,7 @@ ___
 6. Update `cloudflared` container with the token:
 
     ```bash
-    cd /path/to/homelab
+    cd /opt/homelab
     docker compose up -d cloudflared
     ```
 
@@ -549,54 +658,167 @@ ___
 
 ___
 
-## Migrate to a New Server
+## Migrate to new server + new disks
 
-1. Prepare the new server
+1. Prepare the new server:
 
    - Install Docker & Docker Compose
-   - Create the same user and directory structure
+   - Install and configure ZFS
+   - Create the same user
    - Ensure required ports are available (see port forwarding table above)
    - Set the correct timezone
 
-2. Clone this repository
-3. Restore environment variables
+2. Create and mount the ZFS pool:
 
-    Copy your .env file from the old server:
+   Recreate the pool layout on the new server (see [0B. Setting up ZFS](#0b-setting-up-zfs)).
 
-    ```bash
-    scp .env user@new-server:/path/to/homelab/.env
-    ```
+   Ensure `/tank` and `/tank/services` exist and are mounted:
 
-4. Restore persistent data (volumes)
+   ```bash
+   zfs list
+   ```
 
-    Copy service data directories from the old server:
+3. Clone this repository:
 
-    ```bash
-    rsync -avz --numeric-ids --progress /old/path/to/homelab/ user@new-server:/new/path/to/homelab/
-    ```
+   ```bash
+   git clone <repo-url> /opt/homelab
+   ```
 
-    > Make sure containers are stopped on the old server during this step to avoid data corruption!
+4. Restore environment variables:
 
-5. (Optional) Gitea's PostgreSQL database might need to be migrated separately using `pg-dump`
+   ```bash
+   scp .env user@new-server:/opt/homelab/.env
+   ```
 
-    On the old server:
+5. Stop containers on the old server:
 
-    ```bash
-    cd /old/path/to/homelab
-    docker compose stop gitea
-    docker exec -t gitea-db pg_dump -U gitea gitea > gitea.sql
-    ```
+   ```bash
+   cd /opt/homelab
+   docker compose stop
+   ```
 
-    On the new server:
+6. Restore persistent data (ZFS):
 
-    ```bash
-    scp  user@new-server:/old/path/to/homelab/gitea.sql /new/path/to/homelab/gitea.sql
-    cd /new/path/to/homelab/
-    docker exec -i gitea-db psql -U gitea gitea < gitea.sql
-    ```
+   ```bash
+   rsync -aHAX --numeric-ids --progress /tank/services/ user@new-server:/tank/services/
+   ```
 
-6. Start the stack
-7. Decommission the old server
+7. Restore repository/config files:
+
+   ```bash
+   rsync -a --progress /opt/homelab/ user@new-server:/opt/homelab/
+   ```
+
+8. Start the stack on the new server:
+
+   ```bash
+   cd /opt/homelab
+   docker compose up -d
+   ```
+
+9. Verify services:
+
+   ```bash
+   docker ps
+   zpool status
+   ```
+
+___
+
+## Migrate to new server + 4 old disks
+
+1. On old server:
+
+   ```bash
+   sudo zpool export tank
+   ```
+
+2. Move the disks and plug them in their new home.
+3. Install and configure ZFS on the new server.
+4. On new server:
+
+   ```bash
+   sudo zpool import
+   ```
+
+   You should see:
+
+   ```bash
+   pool: tank
+   ```
+
+   Then:
+
+   ```bash
+   sudo zpool import tank
+   ```
+
+___
+
+## ZFS Maintenance: Scrub and Resilver
+
+ZFS provides built-in mechanisms to maintain data integrity and recover from disk failures. The two most important operations are **scrub** and **resilver**.
+
+### Scrubbing the Pool
+
+A **scrub** verifies data integrity by reading all data and checking checksums. If corruption is detected and redundancy exists (e.g. mirrors), ZFS will automatically repair it.
+
+```bash
+sudo zpool scrub tank
+```
+
+Check scrub progress:
+
+```bash
+zpool status
+```
+
+Example output:
+
+```bash
+scan: scrub in progress since ...
+    120G scanned, 45G issued, 10G repaired, 2h to go
+```
+
+Schedule via cron:
+
+```bash
+crontab -e
+0 3 1 * * /sbin/zpool scrub tank
+```
+
+### Resilvering (Disk Replacement)
+
+A resilver occurs when a disk is replaced or reattached. ZFS rebuilds data onto the new disk using redundancy from the remaining disks.
+
+1. Identify the failed disk:
+
+   ```bash
+   zpool status
+   ```
+
+2. Replace it with a new disk and run (use `/dev/disk/by-id`):
+
+   ```bash
+   sudo zpool replace tank <old-disk> <new-disk>
+   ```
+
+3. Monitor resilver progress:
+
+   ```bash
+   zpool status
+   ```
+
+   Example output:
+
+   ```bash
+   scan: resilver in progress since ...
+       80G scanned, 35G resilvered, 1h to go
+   ```
+
+   > - The pool remains online and usable during resilver
+   > - Performance may be reduced during the process
+   > - Only used data is copied (not empty space), making resilver faster than traditional RAID rebuilds
 
 ___
 
@@ -606,7 +828,6 @@ ___
 2. Cockpit for interactive system control
 3. Home Assistant for smart home devices (I hate big techs)
 4. Jellyfin with GPU
-5. ZFS for data integrity and snapshots (if I can afford the hardware)
-6. Ollama to make Home Assistant smarter
-7. Grafana for long-term metric aggregation
-8. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
+5. Ollama to make Home Assistant smarter
+6. Grafana for long-term metric aggregation
+7. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
