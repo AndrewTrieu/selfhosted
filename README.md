@@ -30,8 +30,8 @@ The goal of this setup is to be simple, secure, resilient, and easy to maintain,
 | **Unbound**      | Recursive DNS resolver (DNSSEC, Redis cachedb)            | *Internal*                      |
 | **WG-Easy**      | WireGuard VPN with management UI                          | `https://vpn.example.com`       |
 | **3x-ui**        | Xray / V2Ray management panel                             | `https://xui.example.com/admin` |
-| **Gitea**        | Self-hosted Git service (“Git with a cup of tea ☕”)      | `https://git.example.com`       |
-| **Gitea SSH**    | Git-over-SSH via Cloudflare Tunnel + Access               | `ssh.example.com`               |
+| **Forgejo**      | Self-hosted Git service                                   | `https://git.example.com`       |
+| **Forgejo SSH**  | Git-over-SSH via Cloudflare Tunnel + Access               | `ssh.example.com`               |
 | **Crowdsec**     | Behavior-based intrusion detection & prevention (IDS/IPS) | *Internal (via Caddy bouncer)*  |
 | **Caddy**        | Reverse proxy with automatic HTTPS                        | *No direct UI*                  |
 | **Portainer**    | Docker container management                               | `https://<SERVER_IP>:9443`      |
@@ -105,13 +105,13 @@ flowchart LR
     Cloudflare -->|"Tunnel"| Cloudflared
 
     %% SSH tunnel
-    Cloudflared -->|"SSH :22"| GiteaSSH
+    Cloudflared -->|"SSH :22"| ForgejoSSH
 
     %% Reverse proxy targets
     Caddy --> Vaultwarden
     Caddy --> TwoFAuth["2FAuth"]
     Caddy --> Filebrowser
-    Caddy --> GiteaUI["Gitea UI"]
+    Caddy --> ForgejoUI["Forgejo UI"]
     Caddy --> AdGuardUI["AdGuard UI"]
     Caddy --> WGEasyUI["WG-Easy UI"]
     Caddy --> XUIAdmin["3X-UI Admin Panel"]
@@ -139,9 +139,9 @@ flowchart LR
             AdGuardUI["AdGuard UI (:3000)"]
         end
 
-        subgraph Gitea["Gitea"]
-            GiteaSSH["Gitea SSH"]
-            GiteaUI["Gitea UI (:3000)"]
+        subgraph Forgejo["Forgejo"]
+            ForgejoSSH["Forgejo SSH"]
+            ForgejoUI["Forgejo UI (:3000)"]
         end
 
         subgraph XUI["3X-UI (Xray Core)"]
@@ -167,7 +167,7 @@ This homelab intentionally uses multiple access methods, each optimized for a di
 | Method                    | Cloudflare | Protocol         | Purpose                               |
 | ------------------------- | ---------- | ---------------- | ------------------------------------- |
 | **Web UIs**               | ✅ Proxied | HTTPS            | Normal apps & dashboards              |
-| **Gitea SSH**             | ✅ Tunnel  | SSH (TCP/22)     | Secure Git access via Zero Trust      |
+| **Forgejo SSH**           | ✅ Tunnel  | SSH (TCP/22)     | Secure Git access via Zero Trust      |
 | **VLESS Reality**         | ❌ DNS-only| Raw TCP + TLS    | Stealth / censorship-resistant access |
 | **VLESS WebSocket (CDN)** | ✅ Proxied | HTTP / WebSocket | Compatibility fallback                |
 | **WireGuard**             | ❌ DNS-only| UDP              | Non-HTTP infrastructure               |
@@ -216,9 +216,9 @@ The homelab uses a split layout:
 │       ├── crowdsec
 │       │   └── acquis.d
 │       │       └── caddy.yml    # Crowdsec's Caddy configuration
-│       ├── gitea
+│       ├── forgejo
 │       │   └── runner
-│       │       └── config.yaml  # Gitea Runner configuration
+│       │       └── config.yaml  # Forgejo Runner configuration
 │       └── unbound
 │           ├── custom.conf.d    # Unbound modular configuration
 │           └── root.hints
@@ -297,8 +297,9 @@ ___
    sudo zfs create tank/services/crowdsec
    sudo zfs create tank/services/dozzle
    sudo zfs create tank/services/filebrowser
-   sudo zfs create tank/services/gitea
-   sudo zfs create tank/services/gitea/postgres
+   sudo zfs create tank/services/forgejo
+   sudo zfs create tank/services/forgejo/postgres
+   sudo zfs create tank/services/forgejo/runner
    sudo zfs create tank/services/portainer
    sudo zfs create tank/services/unbound
    sudo zfs create tank/services/unbound/redis
@@ -309,7 +310,7 @@ ___
    For PostgreSQL and Redis, use a smaller record size:
 
    ```bash
-   sudo zfs set recordsize=16K tank/services/gitea/postgres
+   sudo zfs set recordsize=16K tank/services/forgejo/postgres
    sudo zfs set recordsize=16K tank/services/unbound/redis
    ```
 
@@ -323,11 +324,11 @@ ___
 
    ```bash
    sudo mkdir -p /tank/services/crowdsec/acquis.d
-   sudo mkdir -p /tank/services/gitea/runner
+   sudo mkdir -p /tank/services/forgejo/runner
    sudo mkdir -p /tank/services/unbound/custom.conf.d
 
    sudo cp /opt/homelab/services/crowdsec/acquis.d/caddy.yml /tank/services/crowdsec/acquis.d/
-   sudo cp /opt/homelab/services/gitea/runner/config.yaml /tank/services/gitea/runner/
+   sudo cp /opt/homelab/services/forgejo/runner/config.yaml /tank/services/forgejo/runner/
    sudo cp /opt/homelab/services/unbound/custom.conf.d/cachedb.conf /tank/services/unbound/custom.conf.d/
    sudo cp /opt/homelab/services/unbound/root.hints /tank/services/unbound/
    ```
@@ -537,7 +538,7 @@ ___
 
 1. In Cloudflare Dashboard, navigate to ***Zero Trust*** > ***Networks*** > ***Connectors***
 2. Create a new **Cloudflared** tunnel
-3. Give it a name, e.g., `Gitea SSH`
+3. Give it a name, e.g., `Forgejo SSH`
 4. Copy the tunnel token and put it in `.env` as `CF_TUNNEL_TOKEN`
 5. Go to the ***Published hostname routes*** and add a new entry:
 
@@ -549,7 +550,7 @@ ___
     | Service                   |               |
     | ------------------------- | ------------- |
     | *Type*                    | *URL*         |
-    | `SSH`                     | `gitea:22`    |
+    | `SSH`                     | `forgejo:22`    |
 
 6. Update `cloudflared` container with the token:
 
@@ -566,7 +567,7 @@ ___
     | Basic information                      |                            |
     | -------------------------------------- | -------------------------- |
     | *Application name*                     | *Session duration*         |
-    | `Gitea SSH` or something else you like | 24 hours                   |
+    | `Forgejo SSH` or something else you like | 24 hours                   |
 
     | Public hostname           |               |               |                  |
     | ------------------------- | ------------- | ------------- | ---------------- |
@@ -586,10 +587,10 @@ ___
     HostName ssh.yourdomain.com
     User git
     ProxyCommand cloudflared access ssh --hostname %h
-    IdentityFile ~/.ssh/<your_gitea_private_ssh_key>
+    IdentityFile ~/.ssh/<your_forgejo_private_ssh_key>
     ```
 
-    > Remember to add the public key to Gitea!
+    > Remember to add the public key to Forgejo!
 
 3. Authenticate with Cloudflare
 
@@ -618,8 +619,8 @@ ___
     You should see:
 
     ```bash
-    Hi there, <username>! You've successfully authenticated with the key named <key_name>, but Gitea does not provide shell access.
-    If this is unexpected, please log in with password and setup Gitea under another user.
+    Hi there, <username>! You've successfully authenticated with the key named <key_name>, but Forgejo does not provide shell access.
+    If this is unexpected, please log in with password and setup Forgejo under another user.
     ```
 
 > You will need to authenticate yourself again after 24 hours.
@@ -830,4 +831,6 @@ ___
 4. Jellyfin with GPU
 5. Ollama to make Home Assistant smarter
 6. Grafana for long-term metric aggregation
-7. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
+7. Authentik for IdP
+8. Ansible and Kubernetes
+9. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
