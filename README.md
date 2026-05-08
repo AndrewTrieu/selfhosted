@@ -324,11 +324,11 @@ ___
 
    ```bash
    sudo mkdir -p /tank/services/crowdsec/acquis.d
-   sudo mkdir -p /tank/services/forgejo/runner
+   sudo mkdir -p /tank/services/forgejo/runner/data
    sudo mkdir -p /tank/services/unbound/custom.conf.d
 
    sudo cp /opt/homelab/services/crowdsec/acquis.d/caddy.yml /tank/services/crowdsec/acquis.d/
-   sudo cp /opt/homelab/services/forgejo/runner/config.yaml /tank/services/forgejo/runner/
+   sudo cp /opt/homelab/services/forgejo/runner/data/config.yaml /tank/services/forgejo/runner/data
    sudo cp /opt/homelab/services/unbound/custom.conf.d/cachedb.conf /tank/services/unbound/custom.conf.d/
    sudo cp /opt/homelab/services/unbound/root.hints /tank/services/unbound/
    ```
@@ -550,7 +550,7 @@ ___
     | Service                   |               |
     | ------------------------- | ------------- |
     | *Type*                    | *URL*         |
-    | `SSH`                     | `forgejo:22`    |
+    | `SSH`                     | `forgejo:22`  |
 
 6. Update `cloudflared` container with the token:
 
@@ -567,7 +567,7 @@ ___
     | Basic information                      |                            |
     | -------------------------------------- | -------------------------- |
     | *Application name*                     | *Session duration*         |
-    | `Forgejo SSH` or something else you like | 24 hours                   |
+    | `Forgejo SSH`                          | 24 hours                   |
 
     | Public hostname           |               |               |                  |
     | ------------------------- | ------------- | ------------- | ---------------- |
