@@ -38,16 +38,15 @@ services:
       - proxy
 
   # ==========================
-  # Filebrowser (Cloud file manager)
+  # Filebrowser Quantum (Cloud file manager)
   # ==========================
   filebrowser:
-    image: filebrowser/filebrowser:latest
+    image: gtstef/filebrowser:stable
     container_name: filebrowser
     restart: always
     volumes:
       - /tank/services/filebrowser/srv:/srv
-      - /tank/services/filebrowser/database:/database
-      - /tank/services/filebrowser/config:/config
+      - /tank/services/filebrowser/data:/home/filebrowser/data
     user: "1000:1000"
     networks:
       - proxy

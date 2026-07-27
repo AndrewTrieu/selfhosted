@@ -216,11 +216,14 @@ The homelab uses a split layout:
 │       ├── crowdsec
 │       │   └── acquis.d
 │       │       └── caddy.yml    # Crowdsec's Caddy configuration
+│       ├── filebrowser
+│       │   └── data
+│       │       └── config.yml    # Filebrowser's configuration
 │       ├── forgejo
 │       │   └── runner
-│       │       └── config.yaml  # Forgejo Runner configuration
+│       │       └── config.yaml  # Forgejo Runner's configuration
 │       └── unbound
-│           ├── custom.conf.d    # Unbound modular configuration
+│           ├── custom.conf.d    # Unbound's modular configuration
 │           └── root.hints
 ```
 
@@ -297,6 +300,7 @@ ___
    sudo zfs create tank/services/crowdsec
    sudo zfs create tank/services/dozzle
    sudo zfs create tank/services/filebrowser
+   sudo zfs create tank/services/filebrowser/srv
    sudo zfs create tank/services/forgejo
    sudo zfs create tank/services/forgejo/postgres
    sudo zfs create tank/services/forgejo/runner
@@ -324,10 +328,12 @@ ___
 
    ```bash
    sudo mkdir -p /tank/services/crowdsec/acquis.d
+   sudo mkdir -p /tank/services/filebrowser/data
    sudo mkdir -p /tank/services/forgejo/runner/data
    sudo mkdir -p /tank/services/unbound/custom.conf.d
 
    sudo cp /opt/homelab/services/crowdsec/acquis.d/caddy.yml /tank/services/crowdsec/acquis.d/
+   sudo cp /opt/homelab/services/filebrowser/data/config.yml /tank/services/filebrowser/data
    sudo cp /opt/homelab/services/forgejo/runner/data/config.yaml /tank/services/forgejo/runner/data
    sudo cp /opt/homelab/services/unbound/custom.conf.d/cachedb.conf /tank/services/unbound/custom.conf.d/
    sudo cp /opt/homelab/services/unbound/root.hints /tank/services/unbound/
