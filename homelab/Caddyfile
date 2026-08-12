@@ -81,6 +81,22 @@
 }
 
 # ===========================
+# Airtrail
+# ===========================
+{env.FLIGHTS_DOMAIN} {
+    import common_config
+    reverse_proxy airtrail:3000
+}
+
+# ===========================
+# Authentik
+# ===========================
+{env.AUTH_DOMAIN} {
+    import common_config
+    reverse_proxy authentik-server:9000
+}
+
+# ===========================
 # Adguard Home
 # ===========================
 {env.DNS_DOMAIN} {
@@ -98,11 +114,11 @@
 }
 
 # ===========================
-# Gitea
+# Forgejo
 # ===========================
 {env.GIT_DOMAIN} {
     import common_config
-    reverse_proxy gitea:3000
+    reverse_proxy forgejo:3000
 }
 
 # ===========================

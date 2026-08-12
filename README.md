@@ -25,11 +25,13 @@ The goal of this setup is to be simple, secure, resilient, and easy to maintain,
 | ---------------- | --------------------------------------------------------- | ------------------------------- |
 | **Vaultwarden**  | Bitwarden-compatible password manager                     | `https://vault.example.com`     |
 | **2FAuth**       | Self-hosted two-factor authentication manager             | `https://auth.example.com`      |
-| **Filebrowser**  | Lightweight web-based file manager                        | `https://storage.example.com`   |
+| **Filebrowser**  | Lightweight web-based file manager                        | `https://cloud.example.com`     |
 | **AdGuard Home** | DNS-level ad & tracker blocking                           | `https://dns.example.com`       |
 | **Unbound**      | Recursive DNS resolver (DNSSEC, Redis cachedb)            | *Internal*                      |
 | **WG-Easy**      | WireGuard VPN with management UI                          | `https://vpn.example.com`       |
 | **3x-ui**        | Xray / V2Ray management panel                             | `https://xui.example.com/admin` |
+| **AirTrail**     | Flight tracking dashboard                                 | `https://flights.example.com`   |
+| **Authentik**    | Identity provider & SSO                                   | `https://auth.example.com`      |
 | **Forgejo**      | Self-hosted Git service                                   | `https://git.example.com`       |
 | **Forgejo SSH**  | Git-over-SSH via Cloudflare Tunnel + Access               | `ssh.example.com`               |
 | **Crowdsec**     | Behavior-based intrusion detection & prevention (IDS/IPS) | *Internal (via Caddy bouncer)*  |
@@ -111,6 +113,8 @@ flowchart LR
     Caddy --> Vaultwarden
     Caddy --> TwoFAuth["2FAuth"]
     Caddy --> Filebrowser
+    Caddy --> AirTrail
+    Caddy --> Authentik
     Caddy --> ForgejoUI["Forgejo UI"]
     Caddy --> AdGuardUI["AdGuard UI"]
     Caddy --> WGEasyUI["WG-Easy UI"]
@@ -129,6 +133,8 @@ flowchart LR
         Caddy
         Vaultwarden
         TwoFAuth
+        AirTrail
+        Authentik
         Filebrowser
         Unbound
         Cloudflared
@@ -182,6 +188,8 @@ These domains are public-facing HTTP(S) services and benefit from Cloudflare’s
 - git.example.com
 - xui.example.com
 - dns.example.com
+- flights.example.com
+- auth.example.com
 
 ### DNS-only domains (grey cloud)
 
@@ -301,6 +309,11 @@ ___
    sudo zfs create tank/services/dozzle
    sudo zfs create tank/services/filebrowser
    sudo zfs create tank/services/filebrowser/srv
+   sudo zfs create tank/services/airtrail
+   sudo zfs create tank/services/airtrail/postgres
+   sudo zfs create tank/services/authentik
+   sudo zfs create tank/services/authentik/postgres
+   sudo zfs create tank/services/authentik/redis
    sudo zfs create tank/services/forgejo
    sudo zfs create tank/services/forgejo/postgres
    sudo zfs create tank/services/forgejo/runner
@@ -316,6 +329,9 @@ ___
    ```bash
    sudo zfs set recordsize=16K tank/services/forgejo/postgres
    sudo zfs set recordsize=16K tank/services/unbound/redis
+   sudo zfs set recordsize=16K tank/services/authentik/redis
+   sudo zfs set recordsize=16K tank/services/authentik/postgres
+   sudo zfs set recordsize=16K tank/services/airtrail/postgres
    ```
 
 7. Enable automatic snapshots:
@@ -502,7 +518,7 @@ sudo systemctl enable docker
 Run:
 
 ```bash
-cd /opt/homelab
+cd /tank
 sudo chown -R 1000:1000 services
 sudo chmod -R 755 services
 ```

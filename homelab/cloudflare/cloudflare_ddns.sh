@@ -17,6 +17,8 @@ PROXIED_ON=(
   "git"
   "xui"
   "dns"
+  "flights"
+  "auth"
 )
 
 # Cloudflare PROXIED = false (DNS only)

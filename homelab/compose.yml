@@ -52,6 +52,43 @@ services:
       - proxy
 
   # ==========================
+  # Airtrail (Flight tracking)
+  # ==========================
+  airtrail-db:
+    image: postgres:15
+    container_name: airtrail-db
+    restart: always
+    environment:
+      POSTGRES_DB: airtrail
+      POSTGRES_USER: airtrail
+      POSTGRES_PASSWORD: ${AIRTRAIL_DB_PASSWORD}
+    volumes:
+      - /tank/services/airtrail/postgres:/var/lib/postgresql/data
+    networks:
+      - proxy
+
+  airtrail:
+    container_name: airtrail
+    image: johly/airtrail:latest
+    restart: always
+    depends_on:
+      - airtrail-db
+    environment:
+      ORIGIN: "https://${FLIGHTS_DOMAIN}"
+      DB_DATABASE_NAME: airtrail
+      DB_USERNAME: airtrail
+      DB_PASSWORD: ${AIRTRAIL_DB_PASSWORD}
+      DB_URL: "postgres://airtrail:${AIRTRAIL_DB_PASSWORD}@airtrail-db:5432/airtrail"
+      UPLOAD_LOCATION: /app/uploads
+      BODY_SIZE_LIMIT: 20M
+      INTEGRATIONS_AERO_DATA_BOX_KEY: ${AIRTRAIL_AERO_DATA_BOX_KEY}
+      INTEGRATIONS_OPEN_AIP_KEY: ${AIRTRAIL_OPEN_AIP_KEY}
+    volumes:
+      - /tank/services/airtrail:/app/uploads
+    networks:
+      - proxy
+
+  # ==========================
   # Unbound DNS Resolver with Redis Cache
   # ==========================
   unbound-redis:
@@ -227,7 +264,7 @@ services:
       - proxy
 
   authentik-redis:
-    image: redis:alpine
+    image: redis:latest
     container_name: authentik-redis
     restart: always
     volumes:
@@ -312,6 +349,8 @@ services:
       DNS_DOMAIN: ${DNS_DOMAIN}
       XUI_DOMAIN: ${XUI_DOMAIN}
       REALITY_DOMAIN: ${REALITY_DOMAIN}
+      FLIGHTS_DOMAIN: ${FLIGHTS_DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
       CF_API_TOKEN: ${CF_API_TOKEN}
       CROWDSEC_API_KEY: ${CROWDSEC_API_KEY}
       EMAIL: ${EMAIL}
