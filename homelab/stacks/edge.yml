@@ -1,0 +1,71 @@
+services:
+  caddy:
+    build:
+      context: /tank/services/caddy
+      dockerfile: Dockerfile
+    container_name: caddy
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+      - /tank/services/caddy/config:/config
+      - /tank/services/caddy/data:/data
+      - /tank/services/site:/srv/site:ro
+    environment:
+      VAULT_DOMAIN: ${VAULT_DOMAIN}
+      TWOFAUTH_DOMAIN: ${TWOFAUTH_DOMAIN}
+      STORAGE_DOMAIN: ${STORAGE_DOMAIN}
+      WG_DOMAIN: ${WG_DOMAIN}
+      GIT_DOMAIN: ${GIT_DOMAIN}
+      DNS_DOMAIN: ${DNS_DOMAIN}
+      XUI_DOMAIN: ${XUI_DOMAIN}
+      REALITY_DOMAIN: ${REALITY_DOMAIN}
+      AIRTRAIL_DOMAIN: ${AIRTRAIL_DOMAIN}
+      HA_DOMAIN: ${HA_DOMAIN}
+      ROOT_DOMAIN: ${ROOT_DOMAIN}
+      CF_API_TOKEN: ${CF_API_TOKEN}
+      CROWDSEC_API_KEY: ${CROWDSEC_API_KEY}
+      EMAIL: ${EMAIL}
+      LOG_FILE: /data/access.log
+    networks:
+      - proxy
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: always
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
+    networks:
+      - proxy
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    restart: always
+    depends_on:
+      - caddy
+    environment:
+      COLLECTIONS: >
+        crowdsecurity/caddy
+        crowdsecurity/linux
+        crowdsecurity/sshd
+        crowdsecurity/http-cve
+        crowdsecurity/base-http-scenarios
+        crowdsecurity/whitelist-good-actors
+        crowdsecurity/appsec-virtual-patching
+      GID: "1000"
+    volumes:
+      - /tank/services/crowdsec/data:/var/lib/crowdsec/data
+      - /tank/services/crowdsec/config:/etc/crowdsec
+      - /tank/services/crowdsec/acquis.d:/etc/crowdsec/acquis.d
+      - /tank/services/caddy/data:/var/log/caddy:ro
+    networks:
+      - proxy
+

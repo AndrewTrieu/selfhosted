@@ -1,0 +1,25 @@
+# NOT DEPLOYED — enable by uncommenting its include in compose.yml.
+# Forgejo Actions runner; jobs run inside the privileged docker-in-docker sidecar.
+# Copy services/forgejo/runner/data/config.yaml to /tank first (see README) and
+# register the runner against Forgejo before starting it.
+services:
+  docker-in-docker:
+    image: docker:dind
+    container_name: docker_dind
+    privileged: true
+    command: ['dockerd', '-H', 'tcp://0.0.0.0:2375', '--tls=false']
+    restart: always
+
+  forgejo-runner:
+    image: data.forgejo.org/forgejo/runner:12
+    container_name: runner
+    depends_on:
+      docker-in-docker:
+        condition: service_started
+    environment:
+      DOCKER_HOST: tcp://docker-in-docker:2375
+    user: 1001:1001
+    volumes:
+      - /tank/services/forgejo/runner/data:/data
+    restart: always
+    command: forgejo-runner daemon --config config.yaml

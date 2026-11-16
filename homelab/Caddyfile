@@ -11,22 +11,16 @@
     }
 }
 
-# ===========================
-# Global HTTP security headers
-# ===========================
 (sec_headers) {
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy no-referrer
         -Server
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     }
 }
 
-# ===========================
-# Cloudflare DNS
-# ===========================
 (dns_cf) {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
@@ -37,9 +31,6 @@
     }
 }
 
-# ===========================
-# Common configuration for all sites
-# ===========================
 (common_config) {
     import sec_headers
     import dns_cf
@@ -47,87 +38,45 @@
     encode gzip zstd
 }
 
-# ===========================
-# Root Domain
-# Default landing page. Do something more useful here if desired.
-# ===========================
-{env.ROOT_DOMAIN} {
-    import common_config
-    respond 200 "Welcome to {env.ROOT_DOMAIN}!\n"
-}
-
-# ===========================
-# Vaultwarden
-# ===========================
 {env.VAULT_DOMAIN} {
     import common_config
     reverse_proxy vaultwarden:80
 }
 
-# ===========================
-# 2FAuth
-# ===========================
 {env.TWOFAUTH_DOMAIN} {
     import common_config
     reverse_proxy 2fauth:8000
 }
 
-# ===========================
-# Filebrowser
-# ===========================
 {env.STORAGE_DOMAIN} {
     import common_config
     reverse_proxy filebrowser:80
 }
 
-# ===========================
-# Airtrail
-# ===========================
-{env.FLIGHTS_DOMAIN} {
-    import common_config
-    reverse_proxy airtrail:3000
-}
-
-# ===========================
-# Authentik
-# ===========================
-{env.AUTH_DOMAIN} {
-    import common_config
-    reverse_proxy authentik-server:9000
-}
-
-# ===========================
-# Adguard Home
-# ===========================
-{env.DNS_DOMAIN} {
-    import common_config
-    reverse_proxy adguard:3000
-}
-
-# ===========================
-# WireGuard VPN
-# Warning: Exposes your VPN management interface to the internet. Consider removing this section if not needed.
-# ===========================
-{env.WG_DOMAIN} {
-    import common_config
-    reverse_proxy wg-easy:51821
-}
-
-# ===========================
-# Forgejo
-# ===========================
 {env.GIT_DOMAIN} {
     import common_config
     reverse_proxy forgejo:3000
 }
 
-# ===========================
-# 3X-UI
-# ===========================
+{env.DNS_DOMAIN} {
+    import common_config
+    reverse_proxy adguard:3000
+}
+
+{env.AIRTRAIL_DOMAIN} {
+    import common_config
+    reverse_proxy airtrail:3000
+}
+
+{env.HA_DOMAIN} {
+    import common_config
+    reverse_proxy host.docker.internal:8123
+}
+
 {env.XUI_DOMAIN} {
     import sec_headers
     import dns_cf
-    encode gzip zstd
+    encode zstd gzip
 
     # ---- X-UI admin panel ----
     route /admin* {
@@ -148,17 +97,17 @@
     respond 404
 }
 
-# ===========================
-# Reality Domain - Block all traffic on HTTP/HTTPS
-# ===========================
-{env.REALITY_DOMAIN} {
+{env.ROOT_DOMAIN} {
     import sec_headers
     import dns_cf
-    encode gzip zstd
+    encode zstd gzip
 
-    @any {
-        protocol http
-        protocol https
-    }
-    respond @any 444
+    redir https://flowcv.com/
 }
+
+
+# ---- Authentik (not deployed; see stacks/auth.yml) ----
+# {env.AUTH_DOMAIN} {
+#     import common_config
+#     reverse_proxy authentik-server:9000
+# }

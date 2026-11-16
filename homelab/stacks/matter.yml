@@ -1,0 +1,50 @@
+# NOT DEPLOYED — enable by uncommenting its include in compose.yml.
+# Lets Home Assistant itself control Matter devices (Wi-Fi/Ethernet and, via the
+# SONOFF Dongle-M, Thread). Not the same as matter-hub in home.yml; see README.
+# Requires: OTBR_NETWORK_DEVICE in .env, the Dongle-M in "Thread RCP" mode, the
+# host IPv6 sysctls and the /tank/services/{matter-server,otbr} datasets (README).
+services:
+  # Matter controller (matter.js server, successor of the archived
+  # python-matter-server). HA's Matter integration connects to ws://localhost:5580/ws.
+  matter-server:
+    image: ghcr.io/matter-js/matterjs-server:stable
+    container_name: matter-server
+    restart: always
+    network_mode: host          # required for Matter (mDNS + IPv6 to Thread devices)
+    read_only: true
+    environment:
+      TZ: Europe/Helsinki
+      STORAGE_PATH: /data
+      PORT: 5580
+      PRIMARY_INTERFACE: enp5s0 # LAN NIC, same as matter-hub's mDNS interface
+    volumes:
+      - /tank/services/matter-server:/data   # owned by 1000:1000 (container is unprivileged)
+
+  # OpenThread Border Router. The Dongle-M is only the Thread radio (RCP);
+  # this container runs the border router and talks to the dongle over TCP.
+  # HA's OTBR integration connects to http://localhost:8081.
+  otbr:
+    image: ghcr.io/ownbee/hass-otbr-docker:latest
+    container_name: otbr
+    restart: always
+    privileged: true            # required by the image
+    network_mode: host          # required by the image
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    environment:
+      DEVICE: /tmp/ttyOTBR      # placeholder; the real RCP is NETWORK_DEVICE
+      NETWORK_DEVICE: ${OTBR_NETWORK_DEVICE}   # <dongle-ip>:6638
+      BAUDRATE: 115200          # SONOFF's value for Dongle-M Thread RCP firmware
+      FLOW_CONTROL: 0
+      BACKBONE_IF: enp5s0
+      FIREWALL: 1
+      NAT64: 1
+      AUTOFLASH_FIRMWARE: 0
+      OTBR_REST_PORT: 8081
+      OTBR_WEB_PORT: 7586
+      OTBR_LOG_LEVEL: notice
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - /tank/services/otbr:/data/thread

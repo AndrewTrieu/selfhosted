@@ -1,0 +1,35 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: always
+    # Host networking so HA can discover LAN devices (mDNS/SSDP/Bluetooth).
+    # Caddy reaches it via host.docker.internal:8123.
+    network_mode: host
+    environment:
+      TZ: Europe/Helsinki
+    volumes:
+      - /tank/services/homeassistant/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+
+  # Exposes selected HA entities to Google Home (or any Matter controller) as a
+  # local Matter bridge. Web UI: http://<host-lan-ip>:8482 (basic auth).
+  matter-hub:
+    image: ghcr.io/riddix/home-assistant-matter-hub:2.0.59
+    container_name: matter-hub
+    restart: always
+    network_mode: host          # required for Matter (mDNS + UDP 5540+)
+    depends_on:
+      - homeassistant
+    environment:
+      HAMH_HOME_ASSISTANT_URL: http://127.0.0.1:8123/
+      HAMH_HOME_ASSISTANT_ACCESS_TOKEN: ${HAMH_HA_TOKEN}
+      HAMH_LOG_LEVEL: info
+      HAMH_HTTP_PORT: 8482
+      HAMH_HTTP_AUTH_USERNAME: admin
+      HAMH_HTTP_AUTH_PASSWORD: ${HAMH_HTTP_PASSWORD}
+      # Only advertise the LAN NIC, not Docker bridges controllers can't reach
+      HAMH_MDNS_NETWORK_INTERFACE: enp5s0
+    volumes:
+      - /tank/services/matter-hub:/data

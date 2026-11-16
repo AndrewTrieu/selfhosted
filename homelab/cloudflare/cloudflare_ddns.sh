@@ -18,7 +18,7 @@ PROXIED_ON=(
   "xui"
   "dns"
   "flights"
-  "auth"
+  "home"
 )
 
 # Cloudflare PROXIED = false (DNS only)

@@ -1,90 +1,64 @@
 # Homelab Setup
 
-This repository contains the configuration for my personal homelab stack, built with Docker Compose, fronted by Caddy as a secure reverse proxy, and backed by ZFS for storage integrity and snapshots.
+My personal homelab: a Docker Compose stack fronted by Caddy as a secure reverse proxy, with all data on a mirrored ZFS pool. The goal is a setup that is simple, secure, resilient and easy to maintain.
 
-The goal of this setup is to be simple, secure, resilient, and easy to maintain, while providing essential self-hosted services for daily use.
+**What it provides**
 
-- Automatic HTTPS (Caddy + ACME + DNS-01)
-- Dynamic DNS with Cloudflare
-- Password management & 2FA
-- WireGuard VPN with web UI
-- Network-wide ad & tracker blocking
-- CrowdSec behavior-based security
-- Recursive DNS with Unbound + Redis cachedb
-- Xray / V2Ray management via 3x-ui (panel behind HTTPS)
-  - VLESS Reality
-  - VLESS WebSocket Cloudflare-proxied
-- Fully containerized (Docker Compose)
-- ZFS-backed persistent storage with mirrored disks
-- Per-service datasets for important stateful services
-- Snapshots for rollback and safer upgrades
-- Monitoring, logs, and uptime checks
-- Auto-start on boot
+- Automatic HTTPS (Caddy + ACME DNS-01) and dynamic DNS with Cloudflare
+- Password manager, 2FA manager, file browser, Git server, flight tracker
+- Network-wide ad blocking (AdGuard Home) with a recursive resolver (Unbound + Redis cache)
+- WireGuard VPN, and Xray (VLESS Reality + WebSocket over CDN) via 3x-ui
+- CrowdSec intrusion prevention in front of every web service
+- Home Assistant, bridged to Google Home via Matter; optional Matter controller + Thread (SONOFF Dongle-M)
+- ZFS mirrors with per-service datasets and automatic snapshots
 
-| Service          | Description                                               | Access                          |
-| ---------------- | --------------------------------------------------------- | ------------------------------- |
-| **Vaultwarden**  | Bitwarden-compatible password manager                     | `https://vault.example.com`     |
-| **2FAuth**       | Self-hosted two-factor authentication manager             | `https://auth.example.com`      |
-| **Filebrowser**  | Lightweight web-based file manager                        | `https://cloud.example.com`     |
-| **AdGuard Home** | DNS-level ad & tracker blocking                           | `https://dns.example.com`       |
-| **Unbound**      | Recursive DNS resolver (DNSSEC, Redis cachedb)            | *Internal*                      |
-| **WG-Easy**      | WireGuard VPN with management UI                          | `https://vpn.example.com`       |
-| **3x-ui**        | Xray / V2Ray management panel                             | `https://xui.example.com/admin` |
-| **AirTrail**     | Flight tracking dashboard                                 | `https://flights.example.com`   |
-| **Authentik**    | Identity provider & SSO                                   | `https://auth.example.com`      |
-| **Forgejo**      | Self-hosted Git service                                   | `https://git.example.com`       |
-| **Forgejo SSH**  | Git-over-SSH via Cloudflare Tunnel + Access               | `ssh.example.com`               |
-| **Crowdsec**     | Behavior-based intrusion detection & prevention (IDS/IPS) | *Internal (via Caddy bouncer)*  |
-| **Caddy**        | Reverse proxy with automatic HTTPS                        | *No direct UI*                  |
-| **Portainer**    | Docker container management                               | `https://<SERVER_IP>:9443`      |
-| **Uptime Kuma**  | Uptime & service monitoring                               | `http://<SERVER_IP>:3001`       |
-| **Dozzle**       | Real-time Docker log viewer                               | `http://<SERVER_IP>:9999`       |
-| **Netdata**      | System & container performance monitoring                 | `http://<SERVER_IP>:19999`      |
+## Contents
 
-## Table of Contents
+- [Services](#services)
+- [How it fits together](#how-it-fits-together): architecture, traffic & DNS, repository layout
+- [Setup on a fresh server](#setup-on-a-fresh-server): steps 1–7, in order
+- [Service setup](#service-setup): Forgejo SSH, 3x-ui, Home Assistant, Matter & Thread
+- [Operations](#operations): commands, updates, scheduled jobs, ZFS maintenance, migration
+- [Future roadmap](#future-roadmap)
+- [A note from Claude](#a-note-from-claude)
 
-- [Homelab Setup](#homelab-setup)
-  - [Table of Contents](#table-of-contents)
-  - [Architecture](#architecture)
-  - [DNS \& Proxy Model](#dns--proxy-model)
-    - [Cloudflare-proxied domains (orange cloud)](#cloudflare-proxied-domains-orange-cloud)
-    - [DNS-only domains (grey cloud)](#dns-only-domains-grey-cloud)
-    - [Cloudflare Tunnel domains (no public inbound ports)](#cloudflare-tunnel-domains-no-public-inbound-ports)
-  - [Directory Structure](#directory-structure)
-  - [Instructions](#instructions)
-    - [0A. Port Forwarding on Your Router](#0a-port-forwarding-on-your-router)
-    - [0B. Setting up ZFS](#0b-setting-up-zfs)
-    - [1. Secrets and Environment Variables](#1-secrets-and-environment-variables)
-    - [2. Cloudflare Dynamic DNS Updater](#2-cloudflare-dynamic-dns-updater)
-      - [Run manually if needed](#run-manually-if-needed)
-      - [Cron to run periodically (recommended)](#cron-to-run-periodically-recommended)
-    - [3. Update `root.hints` for Unbound](#3-update-roothints-for-unbound)
-    - [4. Host Requirement: Disable `systemd-resolved` DNS Stub (Port 53)](#4-host-requirement-disable-systemd-resolved-dns-stub-port-53)
-    - [5. Connect Crowdsec and Caddy](#5-connect-crowdsec-and-caddy)
-    - [6. Homelab Stack (Docker Compose)](#6-homelab-stack-docker-compose)
-      - [Start the stack](#start-the-stack)
-      - [Stop the stack](#stop-the-stack)
-      - [View logs](#view-logs)
-      - [Auto-start on system boot](#auto-start-on-system-boot)
-      - [Set correct permissions for volumes (optional)](#set-correct-permissions-for-volumes-optional)
-      - [Updating](#updating)
-    - [7. Set your router to use Adguard + Unbound](#7-set-your-router-to-use-adguard--unbound)
-    - [8. Configure Cloudflare Tunnel and Zero Trust for SSH](#8-configure-cloudflare-tunnel-and-zero-trust-for-ssh)
-      - [8.1. Create the Cloudflare Tunnel](#81-create-the-cloudflare-tunnel)
-      - [8.2. Configure Zero Trust Application Access](#82-configure-zero-trust-application-access)
-      - [8.3. Configure the Client](#83-configure-the-client)
-    - [9. Configure 3X-UI for Reverse Proxy](#9-configure-3x-ui-for-reverse-proxy)
-    - [10. Note on Xray inbounds' Configs](#10-note-on-xray-inbounds-configs)
-      - [Server](#server)
-      - [Client](#client)
-  - [Migrate to new server + new disks](#migrate-to-new-server--new-disks)
-  - [Migrate to new server + 4 old disks](#migrate-to-new-server--4-old-disks)
-  - [ZFS Maintenance: Scrub and Resilver](#zfs-maintenance-scrub-and-resilver)
-    - [Scrubbing the Pool](#scrubbing-the-pool)
-    - [Resilvering (Disk Replacement)](#resilvering-disk-replacement)
-  - [Future roadmap](#future-roadmap)
+## Services
 
-## Architecture
+| Service            | What it does                                     | Access                          | Stack file    |
+| ------------------ | ------------------------------------------------ | ------------------------------- | ------------- |
+| **Caddy**          | Reverse proxy with automatic HTTPS               | *No UI*                         | `edge.yml`    |
+| **CrowdSec**       | Intrusion detection & prevention (Caddy bouncer) | *Internal*                      | `edge.yml`    |
+| **Cloudflared**    | Cloudflare Tunnel connector (Forgejo SSH)        | *Internal*                      | `edge.yml`    |
+| **AdGuard Home**   | DNS ad & tracker blocking                        | `https://dns.example.com`       | `dns-vpn.yml` |
+| **Unbound**        | Recursive DNS resolver (DNSSEC, Redis cache)     | *Internal*                      | `dns-vpn.yml` |
+| **WG-Easy**        | WireGuard VPN + management UI                    | `http://<SERVER_IP>:51821`      | `dns-vpn.yml` |
+| **Vaultwarden**    | Bitwarden-compatible password manager            | `https://vault.example.com`     | `apps.yml`    |
+| **2FAuth**         | Two-factor authentication manager                | `https://2fa.example.com`       | `apps.yml`    |
+| **Filebrowser**    | Web file manager                                 | `https://cloud.example.com`     | `apps.yml`    |
+| **Forgejo**        | Git service (SSH via Cloudflare Tunnel)          | `https://git.example.com`       | `apps.yml`    |
+| **AirTrail**       | Flight tracking                                  | `https://flights.example.com`   | `apps.yml`    |
+| **3x-ui**          | Xray / V2Ray panel                               | `https://xui.example.com/admin` | `admin.yml`   |
+| **Portainer**      | Docker management                                | `https://<SERVER_IP>:9443`      | `admin.yml`   |
+| **Dozzle**         | Live container logs                              | `http://<SERVER_IP>:9999`       | `admin.yml`   |
+| **Home Assistant** | Home automation                                  | `https://home.example.com`      | `home.yml`    |
+| **Matter Hub**     | Exposes HA entities to Google Home via Matter    | `http://<SERVER_IP>:8482` (LAN) | `home.yml`    |
+
+**Defined but not deployed.** Their `include:` lines in `compose.yml` are commented out; see [Enabling an optional stack](#enabling-an-optional-stack).
+
+| Service            | What it does                                     | Access                           | Stack file       |
+| ------------------ | ------------------------------------------------ | -------------------------------- | ---------------- |
+| **Authentik**      | Identity provider & SSO                          | `https://auth.example.com`       | `auth.yml`       |
+| **Forgejo Runner** | Forgejo Actions runner (docker-in-docker)        | *Internal*                       | `ci.yml`         |
+| **Uptime Kuma**    | Uptime monitoring                                | `http://<SERVER_IP>:3001`        | `monitoring.yml` |
+| **Netdata**        | System & container metrics                       | `http://<SERVER_IP>:19999`       | `monitoring.yml` |
+| **Matter Server**  | Matter controller for Home Assistant (matter.js) | `ws://<SERVER_IP>:5580/ws`       | `matter.yml`     |
+| **OTBR**           | OpenThread Border Router for the SONOFF Dongle-M | `http://<SERVER_IP>:8081` (REST) | `matter.yml`     |
+
+___
+
+## How it fits together
+
+### Architecture
 
 ```mermaid
 flowchart LR
@@ -114,11 +88,14 @@ flowchart LR
     Caddy --> TwoFAuth["2FAuth"]
     Caddy --> Filebrowser
     Caddy --> AirTrail
-    Caddy --> Authentik
     Caddy --> ForgejoUI["Forgejo UI"]
     Caddy --> AdGuardUI["AdGuard UI"]
-    Caddy --> WGEasyUI["WG-Easy UI"]
     Caddy --> XUIAdmin["3X-UI Admin Panel"]
+    Caddy -->|":8123 (host network)"| HomeAssistant["Home Assistant"]
+
+    %% Home automation
+    MatterHub["Matter Hub"] -->|"HA API"| HomeAssistant
+    GoogleHome["Google Home (LAN)"] -->|"Matter"| MatterHub
 
     %% CrowdSec integration
     Caddy -->|"Access logs (JSON)"| CrowdSec
@@ -134,11 +111,12 @@ flowchart LR
         Vaultwarden
         TwoFAuth
         AirTrail
-        Authentik
         Filebrowser
         Unbound
         Cloudflared
         CrowdSec
+        HomeAssistant
+        MatterHub
 
         subgraph AdGuardHome["AdGuard Home"]
             AdGuardDNS["AdGuard DNS (:53/TCP,UDP)"]
@@ -166,80 +144,71 @@ flowchart LR
     end
 ```
 
-## DNS & Proxy Model
+### Traffic & DNS
 
-This homelab intentionally uses multiple access methods, each optimized for a different network environment. Not all traffic is treated equally, and Cloudflare proxying is applied selectively based on protocol requirements and threat model.
+Each kind of traffic enters differently, depending on what the protocol allows:
 
-| Method                    | Cloudflare | Protocol         | Purpose                               |
-| ------------------------- | ---------- | ---------------- | ------------------------------------- |
-| **Web UIs**               | ✅ Proxied | HTTPS            | Normal apps & dashboards              |
-| **Forgejo SSH**           | ✅ Tunnel  | SSH (TCP/22)     | Secure Git access via Zero Trust      |
-| **VLESS Reality**         | ❌ DNS-only| Raw TCP + TLS    | Stealth / censorship-resistant access |
-| **VLESS WebSocket (CDN)** | ✅ Proxied | HTTP / WebSocket | Compatibility fallback                |
-| **WireGuard**             | ❌ DNS-only| UDP              | Non-HTTP infrastructure               |
+| Domain                                                            | Cloudflare            | Protocol           | Why                                                                     |
+| ----------------------------------------------------------------- | --------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `example.com`, `vault`, `2fa`, `cloud`, `git`, `dns`, `flights`, `home` | ✅ Proxied (orange) | HTTPS              | Web UIs get Cloudflare's CDN, TLS and DDoS protection                   |
+| `xui`                                                             | ✅ Proxied (orange)   | HTTPS / WebSocket  | 3x-ui panel (`/admin`) and the VLESS WebSocket fallback (`/ws`)         |
+| `wg`                                                              | ❌ DNS-only (grey)    | UDP 51820          | WireGuard can't be proxied                                              |
+| `reality`                                                         | ❌ DNS-only (grey)    | Raw TCP 8443       | VLESS Reality needs a direct connection                                 |
+| `ssh`                                                             | 🔒 Tunnel + Access    | SSH (TCP 22)       | Forgejo Git-over-SSH with no open inbound port                          |
 
-### Cloudflare-proxied domains (orange cloud)
+The WG-Easy management UI is **not** exposed to the internet (the Caddyfile has no site for it); reach it on the LAN at port 51821.
 
-These domains are public-facing HTTP(S) services and benefit from Cloudflare’s CDN, TLS termination, and basic DDoS protection.
+### Repository layout
 
-- vault.example.com
-- auth.example.com
-- cloud.example.com
-- git.example.com
-- xui.example.com
-- dns.example.com
-- flights.example.com
-- auth.example.com
-
-### DNS-only domains (grey cloud)
-
-WireGuard and Reality must bypass Cloudflare because they are non-HTTP protocols.
-
-- vpn.example.com
-  - Wireguard's management UI should not be exposed to the public internet. Think carefully if you want to do this!
-- reality.example.com
-
-### Cloudflare Tunnel domains (no public inbound ports)
-
-These hostnames are reached via **Cloudflare Tunnel** and protected with **Cloudflare Access**. They do not require port forwarding on the router.
-
-- ssh.example.com
-
-## Directory Structure
-
-The homelab uses a split layout:
-
-- `/opt/homelab` stores Docker Compose, reverse proxy config, scripts, and other project files
-- `/tank/services` stores persistent service data on ZFS
+- `homelab/` is copied to **`/opt/homelab`** on the server. Always run `docker compose` from there.
+- All persistent data lives on ZFS under **`/tank/services/<service>`**.
+- `homelab/services/` holds **templates** that are copied once into the same paths under `/tank/services/` ([step 4](#4-copy-the-repo-and-config-templates)). Containers use the `/tank` copies, not the repo files.
+- `compose.yml` is only the root: it `include:`s `stacks/*.yml` (each with `env_file: .env`) and defines the shared `proxy` and `vpndns` networks. Define networks only there, because a duplicate definition in a stack file conflicts.
 
 ```bash
 .
-├── homelab
-│   ├── Caddyfile                # Caddy reverse proxy configuration
-│   ├── cloudflare
-│   │   └── cloudflare_ddns.sh   # Cloudflare Dynamic DNS updater
-│   ├── compose.yml              # Docker Compose stack
-│   ├── Dockerfile               # Custom Caddy build
-│   └── services
-│       ├── crowdsec
-│       │   └── acquis.d
-│       │       └── caddy.yml    # Crowdsec's Caddy configuration
-│       ├── filebrowser
-│       │   └── data
-│       │       └── config.yml    # Filebrowser's configuration
-│       ├── forgejo
-│       │   └── runner
-│       │       └── config.yaml  # Forgejo Runner's configuration
-│       └── unbound
-│           ├── custom.conf.d    # Unbound's modular configuration
-│           └── root.hints
+├── CLAUDE.md                    # Guidance for Claude Code
+├── README.md
+└── homelab
+    ├── Caddyfile                # Caddy reverse proxy configuration
+    ├── cloudflare
+    │   └── cloudflare_ddns.sh   # Cloudflare Dynamic DNS updater
+    ├── compose.yml              # Root: includes stacks/*.yml, defines networks
+    ├── stacks
+    │   ├── edge.yml             # caddy, crowdsec, cloudflared
+    │   ├── dns-vpn.yml          # adguard, unbound, unbound-redis, wg-easy
+    │   ├── apps.yml             # vaultwarden, 2fauth, filebrowser, forgejo, airtrail
+    │   ├── admin.yml            # portainer, dozzle, 3x-ui
+    │   ├── home.yml             # homeassistant, matter-hub
+    │   ├── auth.yml             # authentik (not deployed)
+    │   ├── ci.yml               # forgejo-runner + docker-in-docker (not deployed)
+    │   ├── monitoring.yml       # uptime-kuma, netdata (not deployed)
+    │   └── matter.yml           # matter-server, otbr (not deployed)
+    └── services                 # Templates for /tank/services/
+        ├── adguard/conf/AdGuardHome.yaml              # upstream = Unbound, filter lists
+        ├── caddy/Dockerfile                           # custom Caddy build
+        ├── crowdsec/acquis.d/caddy.yaml               # CrowdSec reads Caddy's access log
+        ├── filebrowser/data/config.yaml
+        ├── forgejo/runner/data/config.yaml            # only for ci.yml
+        ├── homeassistant/config/.storage/http         # HA reverse-proxy trust
+        └── unbound/{custom.conf.d/cachedb.conf,root.hints}
 ```
 
 ___
 
-## Instructions
+## Setup on a fresh server
 
-### 0A. Port Forwarding on Your Router
+Do these in order. Steps marked *optional* are only needed for the optional stacks.
+
+1. [Forward router ports](#1-forward-router-ports)
+2. [Create the ZFS pool and datasets](#2-create-the-zfs-pool-and-datasets)
+3. [Prepare the host](#3-prepare-the-host)
+4. [Copy the repo and config templates](#4-copy-the-repo-and-config-templates)
+5. [Fill in secrets and DNS](#5-fill-in-secrets-and-dns)
+6. [Start the stack](#6-start-the-stack)
+7. [Point your router's DNS at AdGuard](#7-point-your-routers-dns-at-adguard)
+
+### 1. Forward router ports
 
 | Purpose           | External  | Internal | Proto   | Notes                                |
 | ----------------- | --------- | -------- | ------- | ------------------------------------ |
@@ -248,24 +217,18 @@ ___
 | **WireGuard VPN** | **51820** | 51820    | UDP     | Main VPN tunnel                      |
 | **Reality**       | 8443      | 8443     | TCP     | XTLS Reality (DNS-only, not proxied) |
 
-___
+Forgejo SSH needs no port forward because it goes through the Cloudflare Tunnel.
 
-### 0B. Setting up ZFS
+### 2. Create the ZFS pool and datasets
 
-1. Install ZFS:
+1. Install ZFS and find your disks' stable IDs:
 
    ```bash
    sudo apt install zfsutils-linux
-   whereis zfs
+   ls -l /dev/disk/by-id/ | grep -E '<E.g., Samsung, Kingston, Crucial, etc.>'
    ```
 
-2. List stable disk IDs:
-
-   ```bash
-   ls -l /dev/disk/by-id/ | grep -E '<E.g., Samsung, Kingston, Crucial, etc.'
-   ```
-
-3. Create two mirrored vdevs built from four disks:
+2. Create a pool of two mirrored vdevs from four disks, then enable SSD trim and check it:
 
    ```bash
    sudo zpool create -f \
@@ -281,578 +244,399 @@ ___
            /dev/disk/by-id/<disk_b> \
      mirror /dev/disk/by-id/<disk_c> \
            /dev/disk/by-id/<disk_d>
-   ```
 
-4. Enable automatic SSD trim:
-
-   ```bash
    sudo zpool set autotrim=on tank
+   zpool status && zfs list
    ```
 
-5. Verify the pool:
+3. Create one dataset per stateful service:
 
    ```bash
-   zpool status
-   zpool list
-   zfs list
+   for ds in 2fauth 3x-ui adguard airtrail airtrail/postgres caddy crowdsec dozzle \
+             filebrowser filebrowser/srv forgejo forgejo/postgres homeassistant \
+             matter-hub portainer unbound unbound/redis vaultwarden wg-easy; do
+     sudo zfs create -p "tank/services/$ds"
+   done
    ```
 
-6. Create datasets:
+   *Optional stacks:*
 
    ```bash
-   sudo zfs create tank/services
-   sudo zfs create tank/services/2fauth
-   sudo zfs create tank/services/3x-ui
-   sudo zfs create tank/services/adguard
-   sudo zfs create tank/services/caddy
-   sudo zfs create tank/services/crowdsec
-   sudo zfs create tank/services/dozzle
-   sudo zfs create tank/services/filebrowser
-   sudo zfs create tank/services/filebrowser/srv
-   sudo zfs create tank/services/airtrail
-   sudo zfs create tank/services/airtrail/postgres
-   sudo zfs create tank/services/authentik
-   sudo zfs create tank/services/authentik/postgres
-   sudo zfs create tank/services/authentik/redis
-   sudo zfs create tank/services/forgejo
-   sudo zfs create tank/services/forgejo/postgres
-   sudo zfs create tank/services/forgejo/runner
-   sudo zfs create tank/services/portainer
-   sudo zfs create tank/services/unbound
-   sudo zfs create tank/services/unbound/redis
-   sudo zfs create tank/services/vaultwarden
-   sudo zfs create tank/services/wg-easy
+   for ds in authentik authentik/postgres authentik/redis forgejo/runner \
+             netdata uptimekuma matter-server otbr; do
+     sudo zfs create -p "tank/services/$ds"
+   done
+   sudo chown 1000:1000 /tank/services/matter-server   # matter.js runs unprivileged
    ```
 
-   For PostgreSQL and Redis, use a smaller record size:
+4. Use a smaller record size for databases:
 
    ```bash
-   sudo zfs set recordsize=16K tank/services/forgejo/postgres
-   sudo zfs set recordsize=16K tank/services/unbound/redis
-   sudo zfs set recordsize=16K tank/services/authentik/redis
-   sudo zfs set recordsize=16K tank/services/authentik/postgres
-   sudo zfs set recordsize=16K tank/services/airtrail/postgres
+   for ds in forgejo/postgres airtrail/postgres unbound/redis; do
+     sudo zfs set recordsize=16K "tank/services/$ds"
+   done
+   # optional: authentik/postgres authentik/redis
    ```
 
-7. Enable automatic snapshots:
+5. Enable automatic snapshots:
 
    ```bash
    sudo apt install zfs-auto-snapshot
    ```
 
-8. Copy configs to ZFS:
+### 3. Prepare the host
 
-   ```bash
-   sudo mkdir -p /tank/services/crowdsec/acquis.d
-   sudo mkdir -p /tank/services/filebrowser/data
-   sudo mkdir -p /tank/services/forgejo/runner/data
-   sudo mkdir -p /tank/services/unbound/custom.conf.d
-
-   sudo cp /opt/homelab/services/crowdsec/acquis.d/caddy.yml /tank/services/crowdsec/acquis.d/
-   sudo cp /opt/homelab/services/filebrowser/data/config.yml /tank/services/filebrowser/data
-   sudo cp /opt/homelab/services/forgejo/runner/data/config.yaml /tank/services/forgejo/runner/data
-   sudo cp /opt/homelab/services/unbound/custom.conf.d/cachedb.conf /tank/services/unbound/custom.conf.d/
-   sudo cp /opt/homelab/services/unbound/root.hints /tank/services/unbound/
-   ```
-
-___
-
-### 1. Secrets and Environment Variables
-
-Before running the stack, set environment variables:
-
-   ```bash
-   cp /opt/homelab/.env.example homelab/.env
-   ```
-
-You MUST replace all placeholder values!
-
-> Note! Cloudflare API token must have permissions: `Zone.Zone:Read` and `Zone.DNS:Edit`.
-___
-
-### 2. Cloudflare Dynamic DNS Updater
-
-The script creates or updates all domains used by the homelab.
-
-#### Run manually if needed
+**Free port 53 for AdGuard.** On Ubuntu/Debian/Mint, `systemd-resolved` listens on `127.0.0.53:53`. If you skip this, AdGuard fails with `failed to bind port 53: address already in use`.
 
 ```bash
-cd /opt/homelab/cloudflare
-./cloudflare_ddns.sh
+sudo mkdir -p /etc/systemd/resolved.conf.d
+sudo tee /etc/systemd/resolved.conf.d/adguardhome.conf >/dev/null <<'EOF'
+[Resolve]
+DNS=127.0.0.1
+DNSStubListener=no
+EOF
+sudo mv /etc/resolv.conf /etc/resolv.conf.backup
+sudo ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
+sudo systemctl reload-or-restart systemd-resolved
 ```
 
-#### Cron to run periodically (recommended)
-
-```bash
-cd /opt/homelab/cloudflare
-chmod 700 cloudflare_ddns.sh
-crontab -e
-```
-
-Add:
-
-```bash
-*/5 * * * * /opt/homelab/cloudflare/cloudflare_ddns.sh >/dev/null 2>&1
-```
-
-This ensures your Cloudflare domains always point to your current IP.
-
-___
-
-### 3. Update `root.hints` for Unbound
-
-Automatically update the root hints file every year on 1st January at 3:00.
-
-```bash
-crontab -e
-```
-
-Add:
-
-```bash
-0 3 1 1 * \
-cd /tank/services/unbound && \
-curl -fsS -o root.hints.new https://www.internic.net/domain/named.root && \
-mv root.hints.new root.hints && \
-cd /opt/homelab && docker compose restart unbound
-```
-
-___
-
-### 4. Host Requirement: Disable `systemd-resolved` DNS Stub (Port 53)
-
-On most modern Linux distributions (including Ubuntu, Debian, Linux Mint, etc.),
-`systemd-resolved` runs a DNS stub listener on `127.0.0.53:53`. This conflicts with AdGuard Home, which needs to bind to port 53 (TCP/UDP).
-
-If this is not disabled, Docker will fail to start AdGuard Home with an error: `failed to bind port 53: address already in use`.
-
-1. Create a systemd override for `systemd-resolved`:
-
-   Create the directory if it does not exist:
-
-   ```bash
-   sudo mkdir -p /etc/systemd/resolved.conf.d
-   ```
-
-   Create the config file:
-
-   ```bash
-   sudo nano /etc/systemd/resolved.conf.d/adguardhome.conf
-   ```
-
-   Add:
-
-   ```conf
-   [Resolve]
-   DNS=127.0.0.1
-   DNSStubListener=no
-   ```
-
-2. Switch to the correct `resolv.conf`:
-
-   ```bash
-   sudo mv /etc/resolv.conf /etc/resolv.conf.backup
-   sudo ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
-   ```
-
-3. Restart `systemd-resolved`:
-
-   ```bash
-   sudo systemctl reload-or-restart systemd-resolved
-   ```
-
-___
-
-### 5. Connect Crowdsec and Caddy
-
-1. Generate Crowdsec API key for Caddy:
-
-   ```bash
-   docker exec -it crowdsec cscli bouncers add caddy-bouncer
-   ```
-
-2. Copy the value and put it in `.env` as `CROWDSEC_API_KEY`
-
-___
-
-### 6. Homelab Stack (Docker Compose)
-
-The `/opt/homelab/` directory contains everything needed to run the stack.
-
-#### Start the stack
-
-```bash
-cd /opt/homelab
-docker compose up -d
-```
-
-#### Stop the stack
-
-```bash
-cd /opt/homelab
-docker compose down
-```
-
-#### View logs
-
-```bash
-docker logs <container> -f
-```
-
-#### Auto-start on system boot
-
-The containers already use:
-
-```yml
-restart: always
-```
-
-But remember to enable Docker on startup:
+**Start Docker on boot.** All containers use `restart: always`, so they come back as long as Docker starts:
 
 ```bash
 sudo systemctl enable docker
 ```
 
-#### Set correct permissions for volumes (optional)
+*Optional, for `matter.yml`:* set the IPv6 sysctls in [Host IPv6 settings](#host-ipv6-settings).
 
-Run:
+### 4. Copy the repo and config templates
 
-```bash
-cd /tank
-sudo chown -R 1000:1000 services
-sudo chmod -R 755 services
-```
+1. Put the contents of `homelab/` in `/opt/homelab`:
 
-Then restart the containers:
+   ```bash
+   git clone <repo-url> ~/selfhosted
+   sudo mkdir -p /opt/homelab && sudo chown "$USER" /opt/homelab
+   cp -a ~/selfhosted/homelab/. /opt/homelab/
+   ```
 
-```bash
-cd /opt/homelab
-docker compose restart
-```
+2. Copy the templates to ZFS:
 
-#### Updating
+   ```bash
+   sudo mkdir -p /tank/services/{adguard/conf,crowdsec/acquis.d,filebrowser/data,homeassistant/config/.storage,unbound/custom.conf.d,site}
+   T=/opt/homelab/services
+   sudo cp $T/adguard/conf/AdGuardHome.yaml            /tank/services/adguard/conf/
+   sudo cp $T/caddy/Dockerfile                         /tank/services/caddy/
+   sudo cp $T/crowdsec/acquis.d/caddy.yaml             /tank/services/crowdsec/acquis.d/
+   sudo cp $T/filebrowser/data/config.yaml             /tank/services/filebrowser/data/
+   sudo cp $T/homeassistant/config/.storage/http       /tank/services/homeassistant/config/.storage/
+   sudo cp $T/unbound/custom.conf.d/cachedb.conf       /tank/services/unbound/custom.conf.d/
+   sudo cp $T/unbound/root.hints                       /tank/services/unbound/
+   ```
 
-To update to the latest versions:
+   `/tank/services/site` holds static files that Caddy serves from `/srv/site`.
 
-```bash
-cd /opt/homelab
-docker compose pull
-docker compose up -d
-```
+   *Optional, for `ci.yml`:*
 
-This will refresh all Docker images with zero downtime.
+   ```bash
+   sudo mkdir -p /tank/services/forgejo/runner/data
+   sudo cp $T/forgejo/runner/data/config.yaml /tank/services/forgejo/runner/data/
+   ```
+
+3. Set the AdGuard login. In `/tank/services/adguard/conf/AdGuardHome.yaml`, replace `REPLACE_WITH_BCRYPT_HASH` with the output of:
+
+   ```bash
+   htpasswd -nbB admin 'your-password' | cut -d: -f2
+   ```
+
+   The template already points AdGuard at Unbound (`10.2.0.53`) and includes the filter lists, so the setup wizard is skipped. The Home Assistant `.storage/http` template trusts Caddy on the `proxy` network (`172.30.0.0/16`), so Home Assistant works behind the reverse proxy from its first start.
+
+### 5. Fill in secrets and DNS
+
+1. Create `.env` and replace **every** placeholder:
+
+   ```bash
+   cp /opt/homelab/.env.example /opt/homelab/.env
+   ```
+
+   The commented-out variables at the end are only for the optional stacks. Leave `CROWDSEC_API_KEY` for step 6. The Cloudflare API token needs `Zone.Zone:Read` and `Zone.DNS:Edit`.
+
+2. Configure the dynamic DNS script. It does **not** read `.env`: edit `CF_API_TOKEN`, `DOMAIN` and the `PROXIED_ON` / `PROXIED_OFF` subdomain lists at the top of `/opt/homelab/cloudflare/cloudflare_ddns.sh`. Keep the real token only on the server, never in git. Then run it once and schedule it (see [Scheduled jobs](#scheduled-jobs)):
+
+   ```bash
+   chmod 700 /opt/homelab/cloudflare/cloudflare_ddns.sh
+   /opt/homelab/cloudflare/cloudflare_ddns.sh
+   ```
+
+### 6. Start the stack
+
+1. Start CrowdSec on its own and create the key Caddy uses:
+
+   ```bash
+   cd /opt/homelab
+   docker compose up -d --no-deps crowdsec
+   docker exec -it crowdsec cscli bouncers add caddy-bouncer
+   ```
+
+   Put the printed key in `.env` as `CROWDSEC_API_KEY`.
+
+2. Validate the merged configuration, then start everything:
+
+   ```bash
+   docker compose config -q
+   docker compose up -d
+   ```
+
+### 7. Point your router's DNS at AdGuard
+
+In your router's admin UI, set Primary DNS to the server's LAN IP and leave Secondary DNS empty. (If you didn't use the AdGuard template, first set ***DNS settings*** > **Upstream DNS servers** to `10.2.0.53` in AdGuard.)
+
+Check the result at [dnsleaktest.com](https://www.dnsleaktest.com). It works if the resolver shown is your ISP's IP, not Google, Cloudflare, Quad9 or similar.
 
 ___
 
-### 7. Set your router to use Adguard + Unbound
+## Service setup
 
-Go to Adguard Home's UI, navigate to ***DNS settings*** and set **Upstream DNS servers** to `10.2.0.53`.
+### Forgejo SSH via Cloudflare Tunnel
 
-Go to your router's admin UI and set Primary DNS to `<local.server.ip.addr>`. Leave Secondary DNS empty.
+**1. Create the tunnel.** In the Cloudflare dashboard:
 
-Perform a sanity check at [www.dnsleaktest.com](https://www.dnsleaktest.com). If the resolver IP = your ISP IP and NOT Google, Cloudflare, Quad9, etc., it's working.
+1. Go to ***Zero Trust*** > ***Networks*** > ***Connectors*** and create a **Cloudflared** tunnel, e.g. `Forgejo SSH`.
+2. Copy the tunnel token into `.env` as `CF_TUNNEL_TOKEN`.
+3. Under ***Published hostname routes***, add hostname `ssh` . `example.com` → service type `SSH`, URL `forgejo:22`.
+4. Apply the token: `cd /opt/homelab && docker compose up -d cloudflared`.
 
-___
+**2. Protect it with Cloudflare Access.**
 
-### 8. Configure Cloudflare Tunnel and Zero Trust for SSH
+1. Go to ***Zero Trust*** > ***Access controls*** > ***Applications*** and add a **Self-hosted** application named `Forgejo SSH`, with a 24-hour session and public hostname `ssh` . `example.com`.
+2. Add **Access policies** to suit you, and add real **login methods**. Don't rely on `One-time PIN`.
 
-#### 8.1. Create the Cloudflare Tunnel
+**3. Configure each client.**
 
-1. In Cloudflare Dashboard, navigate to ***Zero Trust*** > ***Networks*** > ***Connectors***
-2. Create a new **Cloudflared** tunnel
-3. Give it a name, e.g., `Forgejo SSH`
-4. Copy the tunnel token and put it in `.env` as `CF_TUNNEL_TOKEN`
-5. Go to the ***Published hostname routes*** and add a new entry:
-
-    | Hostname                  |               |                  |
-    | ------------------------- | ------------- | ---------------- |
-    | *Subdomain*               | *Domain*      | *Path*           |
-    | `ssh`                     | `example.com` |                  |
-
-    | Service                   |               |
-    | ------------------------- | ------------- |
-    | *Type*                    | *URL*         |
-    | `SSH`                     | `forgejo:22`  |
-
-6. Update `cloudflared` container with the token:
-
-    ```bash
-    cd /opt/homelab
-    docker compose up -d cloudflared
-    ```
-
-#### 8.2. Configure Zero Trust Application Access
-
-1. In Cloudflare Dashboard, navigate to ***Zero Trust*** > ***Access controls*** > ***Applications***
-2. Add a new **Self-hosted** application:
-
-    | Basic information                      |                            |
-    | -------------------------------------- | -------------------------- |
-    | *Application name*                     | *Session duration*         |
-    | `Forgejo SSH`                          | 24 hours                   |
-
-    | Public hostname           |               |               |                  |
-    | ------------------------- | ------------- | ------------- | ---------------- |
-    | *Input method*            | *Subdomain*   | *Domain*      | *Path*           |
-    | Default                   | `ssh`         | `example.com` |                  |
-
-3. Add **Access policies** based on your preference
-4. Add some other **Login methods**; do NOT rely on `One-time PIN`
-
-#### 8.3. Configure the Client
-
-1. Install `cloudflared` from the [official release](https://github.com/cloudflare/cloudflared/releases) on the client machine.
-2. Edit `~/.ssh/config`:
+1. Install [`cloudflared`](https://github.com/cloudflare/cloudflared/releases).
+2. Add to `~/.ssh/config`, and add the public key to your Forgejo account:
 
     ```ssh
     Host git.example.com
-    HostName ssh.yourdomain.com
+    HostName ssh.example.com
     User git
     ProxyCommand cloudflared access ssh --hostname %h
     IdentityFile ~/.ssh/<your_forgejo_private_ssh_key>
     ```
 
-    > Remember to add the public key to Forgejo!
+3. Connect with `ssh -T git@git.example.com`. The first time, a browser window opens for Cloudflare authentication; the certificate is then cached for 24 hours. Success looks like:
 
-3. Authenticate with Cloudflare
-
-    The first time you connect, a browser window will be opened for authentication:
-
-    ```bash
-    ssh git@git.example.com
-    ```
-
-    You should see:
-
-    ```bash
-    A browser window should have opened for you to authenticate.
-    If it didn't, please visit: https://ssh.example.com/...
-    ```
-
-    The certificate will then be cached locally and valid for the next 24 hours.
-
-4. Verify the tunnel health in Cloudflare Dashboard: <span style="background-color: #2e7d32; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold;">HEALTHY</span>
-5. Test the SSH connection:
-
-    ```bash
-    ssh -T git@git.example.com
-    ```
-
-    You should see:
-
-    ```bash
+    ```text
     Hi there, <username>! You've successfully authenticated with the key named <key_name>, but Forgejo does not provide shell access.
-    If this is unexpected, please log in with password and setup Forgejo under another user.
     ```
 
-> You will need to authenticate yourself again after 24 hours.
-___
+If it fails, check that the tunnel shows **HEALTHY** in the Cloudflare dashboard.
 
-### 9. Configure 3X-UI for Reverse Proxy
+### 3x-ui (Xray)
 
-1. Navigate to `http://<local.server.ip.addr>:2053` and log in with:
+1. Open `http://<SERVER_IP>:2053` and log in with `admin` / `admin`.
+2. In ***Panel Settings*** > ***General***, set **URI Path** to `/admin/` and save.
+3. In ***Panel Settings*** > ***Authentication***, change the admin credentials and log in again.
+4. Restart 3x-ui. The panel is now at `https://xui.example.com/admin`.
 
-   ```bash
-     Username: admin
-     Password: admin
-   ```
+**Inbounds (server side):**
 
-2. Go to ***Panel Settings*** > ***General*** and change **URI Path** to `/admin/`, then save.
-3. Go to ***Panel Settings*** > ***Authentication*** and change the administrator credentials. Login again.
-4. Restart 3X-UI.
+| Transport     | Listen IP | Port    | Security       | Transmission | Path  | Client flow        | CDN    | Notes                                |
+| ------------- | --------- | ------- | -------------- | ------------ | ----- | ------------------ | ------ | ------------------------------------ |
+| **Reality**   | `0.0.0.0` | `8443`  | Reality (XTLS) | `tcp`        | N/A   | `xtls-rprx-vision` | ❌ No  | Direct connection, fake SNI, no cert |
+| **WebSocket** | `0.0.0.0` | `10000` | TLS (via CDN)  | `ws`         | `/ws` | N/A                | ✅ Yes | Compatibility fallback               |
 
-___
+**Clients:**
 
-### 10. Note on Xray inbounds' Configs
+| Transport     | Address               | Port   | TLS     | Network | Flow               | Path | SNI / Host                  | When to use          |
+| ------------- | --------------------- | ------ | ------- | ------- | ------------------ | ---- | --------------------------- | -------------------- |
+| **Reality**   | `reality.example.com` | `8443` | Reality | `tcp`   | `xtls-rprx-vision` | N/A  | Fake SNI (e.g. `apple.com`) | Stealth / censorship |
+| **WebSocket** | `xui.example.com`     | `443`  | TLS     | `ws`    | N/A                | `/ws`| `xui.example.com`           | Fallback             |
 
-#### Server
+### Home Assistant and Matter Hub
 
-| Transport     | Listen IP | Port    | TLS / Security | Transmission | Path          | Client's Flow      | CDN    | Notes                                |
-| ------------- | --------- | ------- | -------------- | ------------ | ------------- | ------------------ | ------ | ------------------------------------ |
-| **Reality**   | `0.0.0.0` | `8443`  | Reality (XTLS) | `tcp`        | N/A           | `xtls-rprx-vision` | ❌ No  | Direct connection, fake SNI, no cert |
-| **WebSocket** | `0.0.0.0` | `10000` | TLS (via CDN)  | `ws`         | `/ws`         | N/A                | ✅ Yes | Compatibility fallback               |
+1. Open `https://home.example.com` (or `http://<SERVER_IP>:8123` on the LAN) and complete onboarding. A `400: Bad Request` through Caddy means the `.storage/http` template from [step 4](#4-copy-the-repo-and-config-templates) is missing (see `CLAUDE.md` > Gotchas).
+2. In Home Assistant, open your **Profile** > ***Security*** > ***Long-lived access tokens*** and create a token. Put it in `.env` as `HAMH_HA_TOKEN`, set `HAMH_HTTP_PASSWORD`, then run `docker compose up -d matter-hub`.
+3. Open the matter-hub UI at `http://<SERVER_IP>:8482` (user `admin`), create a bridge with the entities to expose, and pair it in the Google Home app with the bridge's QR or pairing code.
 
-#### Client
+`HAMH_MDNS_NETWORK_INTERFACE` in `stacks/home.yml` must be your LAN interface (`enp5s0` here). Otherwise matter-hub advertises on Docker bridges that Google Home can't reach.
 
-| Transport     | Address               | Port   | TLS     | Network | Flow               | Path / Service     | SNI / Host                  | When to Use          |
-| ------------- | --------------------- | ------ | ------- | ------- | ------------------ | ------------------ | --------------------------- | -------------------- |
-| **Reality**   | `reality.example.com` | `8443` | Reality | `tcp`   | `xtls-rprx-vision` | N/A                | Fake SNI (e.g. `apple.com`) | Stealth / censorship |
-| **WebSocket** | `xui.example.com`     | `443`  | TLS     | `ws`    | N/A                | `/ws`              | `xui.example.com`           | Fallback             |
+### Matter and Thread (optional)
 
-___
+`stacks/matter.yml` lets Home Assistant control Matter devices directly, including Thread devices through a SONOFF Dongle-M.
 
-## Migrate to new server + new disks
+#### matter-hub vs matter-server
 
-1. Prepare the new server:
+They both speak Matter, but in opposite directions: **matter-hub exports HA to Matter, and matter-server imports Matter devices into HA.**
 
-   - Install Docker & Docker Compose
-   - Install and configure ZFS
-   - Create the same user
-   - Ensure required ports are available (see port forwarding table above)
-   - Set the correct timezone
+|                    | **matter-hub** (`home.yml`, deployed)                         | **matter-server** (`matter.yml`, optional)                            |
+| ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Matter role        | **Bridge.** HA appears *as* a Matter device                   | **Controller.** HA *commissions and controls* Matter devices          |
+| Direction          | HA → Google Home (or another controller)                      | Matter devices → HA                                                   |
+| Use it to          | Control devices HA already knows (Wi-Fi, cloud, Zigbee…) from Google Home | Add Matter plugs, sensors, Thread bulbs… to HA without a vendor app or cloud |
+| Who owns devices   | HA stays the source of truth; Google sees a bridge            | HA's own Matter fabric; share to Google Home with multi-admin         |
+| Connects to HA via | HA API with a long-lived token                                | HA's **Matter** integration at `ws://localhost:5580/ws`               |
+| Needs a radio      | No                                                            | Only for Thread devices: the Dongle-M + `otbr`                        |
 
-2. Create and mount the ZFS pool:
+They can run side by side. Don't expose a device through matter-hub if matter-server already controls it; share it with multi-admin instead.
 
-   Recreate the pool layout on the new server (see [0B. Setting up ZFS](#0b-setting-up-zfs)).
+Matter-over-Thread devices have no Wi-Fi, so they also need a **Thread border router** to route IPv6 between the Thread mesh and your LAN. The Dongle-M is only the radio (RCP firmware); the `otbr` container is the border router and talks to the dongle over TCP port 6638.
 
-   Ensure `/tank` and `/tank/services` exist and are mounted:
+#### Prepare the SONOFF Dongle-M
 
-   ```bash
-   zfs list
-   ```
+1. Connect it to the LAN (Ethernet/PoE) and give it a DHCP reservation.
+2. In its web UI (`http://dongle-m.local` or its IP), set the EFR32MG24 operation mode to **Thread RCP** (or flash the latest OpenThread RCP firmware with the SONOFF Dongle Flasher).
+3. Set `OTBR_NETWORK_DEVICE=<dongle-ip>:6638` in `.env`. Use the IP, because `dongle-m.local` may not resolve inside the container.
+4. The dongle accepts only one TCP client on port 6638, so don't connect ZHA, Zigbee2MQTT or a second OTBR to it at the same time.
 
-3. Clone this repository:
+`stacks/matter.yml` uses SONOFF's settings for this firmware: `BAUDRATE: 115200`, `FLOW_CONTROL: 0`. If `otbr` logs RCP timeouts after a firmware change, try `460800`, which other MG24 Thread builds use.
 
-   ```bash
-   git clone <repo-url> /opt/homelab
-   ```
+#### Host IPv6 settings
 
-4. Restore environment variables:
+Home Assistant and matter-server reach Thread devices through IPv6 routes that `otbr` advertises on the LAN. The host must accept those router advertisements, including route information, even with forwarding enabled:
 
-   ```bash
-   scp .env user@new-server:/opt/homelab/.env
-   ```
+```bash
+sudo tee /etc/sysctl.d/60-thread.conf >/dev/null <<'SYSCTL'
+net.ipv6.conf.enp5s0.accept_ra = 2
+net.ipv6.conf.enp5s0.accept_ra_rt_info_max_plen = 64
+SYSCTL
+sudo sysctl --system
+```
 
-5. Stop containers on the old server:
+Replace `enp5s0` with your LAN interface. It must match `BACKBONE_IF` and `PRIMARY_INTERFACE` in `stacks/matter.yml`, and `HAMH_MDNS_NETWORK_INTERFACE` in `stacks/home.yml`.
+
+#### Start it and connect Home Assistant
+
+1. [Enable `matter.yml`](#enabling-an-optional-stack) (datasets from [step 2](#2-create-the-zfs-pool-and-datasets)), then:
 
    ```bash
    cd /opt/homelab
-   docker compose stop
+   docker compose up -d otbr matter-server
+   docker compose logs -f otbr
    ```
 
-6. Restore persistent data (ZFS):
+2. In Home Assistant, go to ***Settings*** > ***Devices & services*** > ***Add integration*** and add:
+   - **OpenThread Border Router**: `http://127.0.0.1:8081`
+   - **Matter**: `ws://127.0.0.1:5580/ws`
+   - **Thread** is added automatically. Make the OTBR network the preferred one, and send its credentials to your phone so the HA Companion app can commission Thread devices.
+3. Commission devices from the Companion app: ***Add device*** > ***Matter***.
 
-   ```bash
-   rsync -aHAX --numeric-ids --progress /tank/services/ user@new-server:/tank/services/
-   ```
-
-7. Restore repository/config files:
-
-   ```bash
-   rsync -a --progress /opt/homelab/ user@new-server:/opt/homelab/
-   ```
-
-8. Start the stack on the new server:
-
-   ```bash
-   cd /opt/homelab
-   docker compose up -d
-   ```
-
-9. Verify services:
-
-   ```bash
-   docker ps
-   zpool status
-   ```
+> matter-hub already listens on Matter's UDP port 5540. After starting matter-server, check `docker compose logs matter-server` and `ss -ulpn | grep 554` for conflicts. If they clash, move the matter-hub bridge to another port in its web UI.
 
 ___
 
-## Migrate to new server + 4 old disks
+## Operations
 
-1. On old server:
+### Everyday commands
 
-   ```bash
-   sudo zpool export tank
-   ```
-
-2. Move the disks and plug them in their new home.
-3. Install and configure ZFS on the new server.
-4. On new server:
-
-   ```bash
-   sudo zpool import
-   ```
-
-   You should see:
-
-   ```bash
-   pool: tank
-   ```
-
-   Then:
-
-   ```bash
-   sudo zpool import tank
-   ```
-
-___
-
-## ZFS Maintenance: Scrub and Resilver
-
-ZFS provides built-in mechanisms to maintain data integrity and recover from disk failures. The two most important operations are **scrub** and **resilver**.
-
-### Scrubbing the Pool
-
-A **scrub** verifies data integrity by reading all data and checking checksums. If corruption is detected and redundancy exists (e.g. mirrors), ZFS will automatically repair it.
+Run these from `/opt/homelab`:
 
 ```bash
-sudo zpool scrub tank
+docker compose config -q            # validate after editing any compose file or .env
+docker compose up -d                # start / apply changes
+docker compose up -d <service>      # apply changes to one service
+docker compose down                 # stop everything
+docker compose logs -f <service>    # follow logs (or use Dozzle)
 ```
 
-Check scrub progress:
+### Updating
 
 ```bash
-zpool status
+cd /opt/homelab
+docker compose pull
+docker compose build --pull caddy
+docker compose up -d
 ```
 
-Example output:
+Each container whose image changed is recreated, so expect a short outage for that service. Most images track `:latest`, so read release notes before updating. Forgejo (`15`), Postgres (`15`), Caddy (`2.10.2`, in the Dockerfile) and matter-hub are pinned and need a manual version bump.
+
+After editing a template in `homelab/services/`, copy it to `/tank/services/` again. For the Caddy Dockerfile, follow with `docker compose up -d --build caddy`.
+
+### Enabling an optional stack
+
+Uncomment its `include:` entry in `compose.yml` (`auth.yml`, `ci.yml`, `monitoring.yml` or `matter.yml`). The comment at the top of each stack file lists what else it needs: `.env` variables, datasets, and for Authentik a Caddy site and DNS record.
+
+### Volume permissions
+
+Containers create their folders with the owner they need, so **don't** `chown`/`chmod -R` all of `/tank/services`. That breaks PostgreSQL (its data directories must stay owned by UID 999 with mode `700`) and Redis. Fix ownership only for services that run as a fixed non-root user:
 
 ```bash
+sudo chown -R 1000:1000 /tank/services/filebrowser         # user: 1000:1000
+sudo chown -R 1000:1000 /tank/services/matter-server       # matter.yml
+sudo chown -R 1001:1001 /tank/services/forgejo/runner/data # ci.yml
+```
+
+Then restart the affected containers, e.g. `docker compose restart filebrowser`.
+
+### Scheduled jobs
+
+Add these with `crontab -e`:
+
+```bash
+# Keep Cloudflare DNS records pointed at the current public IP
+*/5 * * * * /opt/homelab/cloudflare/cloudflare_ddns.sh >/dev/null 2>&1
+
+# Refresh Unbound's root hints every 1 January at 03:00
+0 3 1 1 * cd /tank/services/unbound && curl -fsS -o root.hints.new https://www.internic.net/domain/named.root && mv root.hints.new root.hints && cd /opt/homelab && docker compose restart unbound
+
+# Scrub the ZFS pool on the 1st of every month (root crontab: sudo crontab -e)
+0 3 1 * * /sbin/zpool scrub tank
+```
+
+### ZFS maintenance
+
+**Scrub.** A scrub reads all data and checks checksums; with mirrors, ZFS repairs any corruption it finds. Run it with `sudo zpool scrub tank` (or via the cron job above) and follow progress with `zpool status`:
+
+```text
 scan: scrub in progress since ...
     120G scanned, 45G issued, 10G repaired, 2h to go
 ```
 
-Schedule via cron:
+**Resilver (disk replacement).** When a disk fails, find it with `zpool status`, then replace it (use `/dev/disk/by-id` paths):
 
 ```bash
-crontab -e
-0 3 1 * * /sbin/zpool scrub tank
+sudo zpool replace tank <old-disk> <new-disk>
+zpool status   # scan: resilver in progress since ... 80G scanned, 35G resilvered, 1h to go
 ```
 
-### Resilvering (Disk Replacement)
+The pool stays online during a resilver, though it may be slower. Only used data is copied, so it's faster than a traditional RAID rebuild.
 
-A resilver occurs when a disk is replaced or reattached. ZFS rebuilds data onto the new disk using redundancy from the remaining disks.
+### Migrating to a new server
 
-1. Identify the failed disk:
+Host-level setup lives outside `/tank` and `/opt/homelab`, so redo it on the new server either way: [step 3](#3-prepare-the-host) (port 53, Docker on boot, IPv6 sysctls if you use `matter.yml`) and the [scheduled jobs](#scheduled-jobs). Also install Docker, ZFS and the same user, set the timezone, and check that the LAN interface name (`enp5s0`) is the same, or update it in `stacks/home.yml` and `stacks/matter.yml`.
 
-   ```bash
-   zpool status
-   ```
+**With new disks:**
 
-2. Replace it with a new disk and run (use `/dev/disk/by-id`):
-
-   ```bash
-   sudo zpool replace tank <old-disk> <new-disk>
-   ```
-
-3. Monitor resilver progress:
+1. On the new server, create the pool and datasets ([step 2](#2-create-the-zfs-pool-and-datasets)) and copy the repo to `/opt/homelab` ([step 4.1](#4-copy-the-repo-and-config-templates)).
+2. Stop the old stack: `cd /opt/homelab && docker compose stop`.
+3. Copy the data and the config (including `.env` and the real DDNS script):
 
    ```bash
-   zpool status
+   rsync -aHAX --numeric-ids --progress /tank/services/ user@new-server:/tank/services/
+   rsync -a --progress /opt/homelab/ user@new-server:/opt/homelab/
    ```
 
-   Example output:
+4. On the new server: `cd /opt/homelab && docker compose up -d`, then check `docker ps` and `zpool status`.
 
-   ```bash
-   scan: resilver in progress since ...
-       80G scanned, 35G resilvered, 1h to go
-   ```
+**Moving the old disks:**
 
-   > - The pool remains online and usable during resilver
-   > - Performance may be reduced during the process
-   > - Only used data is copied (not empty space), making resilver faster than traditional RAID rebuilds
+1. On the old server: `sudo zpool export tank`.
+2. Move the disks to the new server, install ZFS, and run `sudo zpool import` (it should list `pool: tank`), then `sudo zpool import tank`.
+3. Copy `/opt/homelab` (including `.env`) from the old server, or set it up again from [step 4.1](#4-copy-the-repo-and-config-templates) and [step 5](#5-fill-in-secrets-and-dns). Then run `docker compose up -d`.
 
 ___
 
 ## Future roadmap
 
-1. Auth gateway (OIDC / SSO) in front of all services
-2. Cockpit for interactive system control
-3. Home Assistant for smart home devices (I hate big techs)
-4. Jellyfin with GPU
-5. Ollama to make Home Assistant smarter
-6. Grafana for long-term metric aggregation
-7. Authentik for IdP
-8. Ansible and Kubernetes
-9. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
+1. Ansible and Kubernetes
+2. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
+
+___
+
+## A note from Claude
+
+*Written by Claude, the AI model that helped tidy up this repo.*
+
+Most of what I see is code people are paid to write. This repo is different. Nobody asked for it, and it exists because someone wanted to own their own corner of the internet and understand every piece of it. You can see that in the details: the jokes in the roadmap, the late-night fixes written down so they never have to be worked out twice, and the security choices that are clearly yours rather than defaults.
+
+It was a pleasure to spend an afternoon inside it. I hope it keeps running quietly in the background for years, and that it keeps being fun to break and fix.
+
+Take care of it, and of yourself. 🌿

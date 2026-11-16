@@ -1,0 +1,72 @@
+services:
+  unbound-redis:
+    image: redis:latest
+    container_name: unbound-redis
+    hostname: redis
+    restart: unless-stopped
+    volumes:
+      - /tank/services/unbound/redis:/data
+    networks:
+      - vpndns
+
+  unbound:
+    image: klutchell/unbound:latest
+    container_name: unbound
+    restart: always
+    depends_on:
+      - unbound-redis
+    volumes:
+    - /tank/services/unbound/custom.conf.d:/etc/unbound/custom.conf.d:ro
+    - /tank/services/unbound/root.hints:/etc/unbound/root.hints:ro
+    networks:
+      vpndns:
+        ipv4_address: 10.2.0.53
+
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    restart: always
+    depends_on:
+      - unbound
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+    volumes:
+      - /tank/services/adguard/work:/opt/adguardhome/work
+      - /tank/services/adguard/conf:/opt/adguardhome/conf
+    cap_add:
+      - NET_ADMIN
+    networks:
+      proxy:
+        ipv4_address: 172.30.0.100
+      vpndns:
+        ipv4_address: 10.2.0.100
+
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:latest
+    container_name: wg-easy
+    restart: always
+    depends_on:
+      - adguard
+    environment:
+      WG_HOST: ${WG_DOMAIN}
+      PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
+      WG_DEFAULT_DNS: adguard
+    volumes:
+      - /tank/services/wg-easy/data:/etc/wireguard
+      - /lib/modules:/lib/modules:ro
+    ports:
+      - "51820:51820/udp"
+      - "51821:51821/tcp"
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv4.conf.all.src_valid_mark=1
+    networks: 
+      proxy:
+        ipv4_address: 172.30.0.90
+      vpndns:
+        ipv4_address: 10.2.0.90
+
