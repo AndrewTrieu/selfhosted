@@ -38,3 +38,23 @@ jobs:
       - name: Lint (production profile)
         working-directory: ansible
         run: ansible-lint
+
+  terraform:
+    runs-on: docker
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Check formatting
+        run: terraform -chdir=terraform fmt -check -recursive
+
+      # No backend and no credentials: validate checks the configuration only, never state or the API.
+      - name: Validate
+        run: |
+          terraform -chdir=terraform init -backend=false -input=false
+          terraform -chdir=terraform validate
