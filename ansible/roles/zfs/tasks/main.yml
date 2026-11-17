@@ -48,29 +48,37 @@
   loop_control:
     label: "{{ item.item | default('') }}"
 
-- name: Create missing service datasets
+- name: Collect the database datasets that need recordsize=16K
+  ansible.builtin.set_fact:
+    zfs_db_datasets: "{{ zfs_recordsize_16k + (homelab_stacks | map('extract', zfs_stack_recordsize_16k) | list | flatten) }}"
+
+- name: Create missing service datasets (database datasets get recordsize=16K at creation)
   ansible.builtin.command:
-    argv: [zfs, create, -p, "{{ zfs_pool_name }}/services/{{ item }}"]
+    argv: "{{ ['zfs', 'create', '-p'] + (['-o', 'recordsize=16K'] if item in zfs_db_datasets else []) + [zfs_pool_name ~ '/services/' ~ item] }}"
   loop: "{{ zfs_datasets + (homelab_stacks | map('extract', zfs_stack_datasets) | list | flatten) }}"
   changed_when: true
   when: (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
 
-- name: Read recordsize of database datasets
+# Only for database datasets that existed before this run. New ones were created with recordsize=16K.
+- name: Read recordsize of existing database datasets
   ansible.builtin.command:
     argv: [zfs, get, -H, -o, value, recordsize, "{{ zfs_pool_name }}/services/{{ item }}"]
   loop: "{{ zfs_recordsize_16k + (homelab_stacks | map('extract', zfs_stack_recordsize_16k) | list | flatten) }}"
   register: zfs_recordsize
   changed_when: false
   check_mode: false
+  when: (zfs_pool_name ~ '/services/' ~ item) in zfs_existing.stdout_lines
 
-- name: Set recordsize=16K on database datasets
+- name: Set recordsize=16K on existing database datasets that differ
   ansible.builtin.command:
     argv: [zfs, set, recordsize=16K, "{{ zfs_pool_name }}/services/{{ item.item }}"]
-  loop: "{{ zfs_recordsize.results }}"
+  loop: "{{ zfs_recordsize.results | default([]) }}"
   loop_control:
     label: "{{ item.item }}"
   changed_when: true
-  when: item.stdout != '16K'
+  when:
+    - item.stdout is defined
+    - item.stdout != '16K'
 
 - name: Give matter-server its unprivileged owner (matter stack)
   ansible.builtin.file:
