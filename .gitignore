@@ -1,3 +1,9 @@
 homelab/.env
 ansible/.vault_pass*
 ansible/*.retry
+
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+terraform/backend.hcl
