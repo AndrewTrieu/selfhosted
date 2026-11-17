@@ -7,8 +7,9 @@ homelab_user: "{{ ansible_user }}"
 # Repo root, resolved from this playbook directory (ansible/ sits next to homelab/).
 homelab_repo_root: "{{ playbook_dir }}/.."
 
-# Set true to also manage the optional stacks (matter.yml and friends).
-homelab_optional_stacks: false
+# Stacks to prepare: any of auth, ci, monitoring, matter. Must match COMPOSE_PROFILES in .env,
+# which is what actually starts them. Empty means the core stacks only.
+homelab_stacks: []
 
 # LAN interface name. Must match stacks/matter.yml and stacks/home.yml.
 homelab_lan_interface: enp5s0

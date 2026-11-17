@@ -9,7 +9,7 @@ My personal homelab: a Docker Compose stack fronted by Caddy as a secure reverse
 - Network-wide ad blocking (AdGuard Home) with a recursive resolver (Unbound + Redis cache)
 - WireGuard VPN, and Xray (VLESS Reality + WebSocket over CDN) via 3x-ui
 - CrowdSec intrusion prevention in front of every web service
-- Home Assistant, bridged to Google Home via Matter; optional Matter controller + Thread (SONOFF Dongle-M)
+- Home Assistant, bridged to Google Home via Matter; a selectable Matter controller and Thread border router (SONOFF Dongle-M)
 - ZFS mirrors with per-service datasets and automatic snapshots
 
 ## Contents
@@ -43,7 +43,7 @@ My personal homelab: a Docker Compose stack fronted by Caddy as a secure reverse
 | **Home Assistant** | Home automation                                  | `https://home.example.com`      | `home.yml`    |
 | **Matter Hub**     | Exposes HA entities to Google Home via Matter    | `http://<SERVER_IP>:8482` (LAN) | `home.yml`    |
 
-**Defined but not deployed.** Their `include:` lines in `compose.yml` are commented out; see [Enabling an optional stack](#enabling-an-optional-stack).
+**Selected per stack.** Each runs only when its profile is listed in `COMPOSE_PROFILES` in `.env`; see [Choosing which stacks to run](#choosing-which-stacks-to-run).
 
 | Service            | What it does                                     | Access                           | Stack file       |
 | ------------------ | ------------------------------------------------ | -------------------------------- | ---------------- |
@@ -169,6 +169,14 @@ The WG-Easy management UI is **not** exposed to the internet (the Caddyfile has 
 .
 ├── CLAUDE.md                    # Guidance for Claude Code
 ├── README.md
+├── .forgejo
+│   └── workflows/ci.yml         # Lint and Terraform checks (inactive until the runner is deployed)
+├── ansible
+│   ├── site.yml                 # Host bootstrap: DNS, sysctls, Docker, ZFS datasets, templates, cron
+│   ├── zfs-pool.yml             # Destructive pool creation, explicit opt-in only
+│   └── roles/                   # Optional host setup, used by the steps in Setup on a fresh server
+├── terraform
+│   └── *.tf                     # Optional: Cloudflare DNS records for the DDNS list
 └── homelab
     ├── Caddyfile                # Caddy reverse proxy configuration
     ├── cloudflare
@@ -180,10 +188,10 @@ The WG-Easy management UI is **not** exposed to the internet (the Caddyfile has 
     │   ├── apps.yml             # vaultwarden, 2fauth, filebrowser, forgejo, airtrail
     │   ├── admin.yml            # portainer, dozzle, 3x-ui
     │   ├── home.yml             # homeassistant, matter-hub
-    │   ├── auth.yml             # authentik (not deployed)
-    │   ├── ci.yml               # forgejo-runner + docker-in-docker (not deployed)
-    │   ├── monitoring.yml       # uptime-kuma, netdata (not deployed)
-    │   └── matter.yml           # matter-server, otbr (not deployed)
+    │   ├── auth.yml             # authentik (profile: auth)
+    │   ├── ci.yml               # forgejo-runner + docker-in-docker (profile: ci)
+    │   ├── monitoring.yml       # uptime-kuma, netdata (profile: monitoring)
+    │   └── matter.yml           # matter-server, otbr (profile: matter)
     └── services                 # Templates for /tank/services/
         ├── adguard/conf/AdGuardHome.yaml              # upstream = Unbound, filter lists
         ├── caddy/Dockerfile                           # custom Caddy build
@@ -198,7 +206,11 @@ ___
 
 ## Setup on a fresh server
 
-Do these in order. Steps marked *optional* are only needed for the optional stacks.
+Do these in order. Parts marked with a stack name, such as *Matter* or *Forgejo runner*, are only needed if you run that stack.
+
+Each step gives the manual commands. Where the repo has automation, an **Automated (optional)** note shows the Ansible equivalent. Both paths reach the same state, so use whichever you prefer, and mix them if you want.
+
+> **Ansible (optional):** install the tooling with `pip install -r ansible/requirements-dev.txt` and `ansible-galaxy collection install -r ansible/requirements.yml`. Set `ansible/inventory/hosts.yml` for this machine (`ansible_connection: local`), and set `homelab_lan_interface`, `homelab_optional_stacks` and `zfs_pool_disks` in `ansible/group_vars/all.yml`. Run every Ansible command from the `ansible/` directory, and add `-K` to enter your sudo password.
 
 1. [Forward router ports](#1-forward-router-ports)
 2. [Create the ZFS pool and datasets](#2-create-the-zfs-pool-and-datasets)
@@ -259,11 +271,11 @@ Forgejo SSH needs no port forward because it goes through the Cloudflare Tunnel.
    done
    ```
 
-   *Optional stacks:*
+   *Stack datasets (only for the stacks you run):*
 
    ```bash
-   for ds in authentik authentik/postgres authentik/redis forgejo/runner \
-             netdata uptimekuma matter-server otbr; do
+   for ds in authentik authentik/postgres authentik/redis authentik/media authentik/custom-templates authentik/certs \
+             forgejo/runner netdata uptimekuma matter-server otbr; do
      sudo zfs create -p "tank/services/$ds"
    done
    sudo chown 1000:1000 /tank/services/matter-server   # matter.js runs unprivileged
@@ -275,7 +287,7 @@ Forgejo SSH needs no port forward because it goes through the Cloudflare Tunnel.
    for ds in forgejo/postgres airtrail/postgres unbound/redis; do
      sudo zfs set recordsize=16K "tank/services/$ds"
    done
-   # optional: authentik/postgres authentik/redis
+   # recordsize for the Authentik databases
    ```
 
 5. Enable automatic snapshots:
@@ -283,6 +295,8 @@ Forgejo SSH needs no port forward because it goes through the Cloudflare Tunnel.
    ```bash
    sudo apt install zfs-auto-snapshot
    ```
+
+> **Automated (optional):** `ansible-playbook site.yml --tags zfs` creates the datasets and sets `recordsize`. It never creates a dataset over a directory that already has files. Pool creation is separate: `zfs-pool.yml` is destructive and needs `-e zfs_pool_create=true`.
 
 ### 3. Prepare the host
 
@@ -306,7 +320,9 @@ sudo systemctl reload-or-restart systemd-resolved
 sudo systemctl enable docker
 ```
 
-*Optional, for `matter.yml`:* set the IPv6 sysctls in [Host IPv6 settings](#host-ipv6-settings).
+*Matter stack:* set the IPv6 sysctls in [Host IPv6 settings](#host-ipv6-settings).
+
+> **Automated (optional):** `ansible-playbook site.yml --tags host_dns,host_sysctl,docker,cron` covers this step. The DNS change briefly affects name resolution on the host, so run it from a local console or keep a way to restore `/etc/resolv.conf`. The IPv6 sysctls apply only when `homelab_optional_stacks` is true.
 
 ### 4. Copy the repo and config templates
 
@@ -334,7 +350,7 @@ sudo systemctl enable docker
 
    `/tank/services/site` holds static files that Caddy serves from `/srv/site`.
 
-   *Optional, for `ci.yml`:*
+   *Forgejo runner (ci stack):*
 
    ```bash
    sudo mkdir -p /tank/services/forgejo/runner/data
@@ -349,6 +365,8 @@ sudo systemctl enable docker
 
    The template already points AdGuard at Unbound (`10.2.0.53`) and includes the filter lists, so the setup wizard is skipped. The Home Assistant `.storage/http` template trusts Caddy on the `proxy` network (`172.30.0.0/16`), so Home Assistant works behind the reverse proxy from its first start.
 
+> **Automated (optional):** `ansible-playbook site.yml --tags templates` copies the templates. It never overwrites a file that already exists, so running it again is safe. Step 4.1, copying the repo to `/opt/homelab`, stays manual.
+
 ### 5. Fill in secrets and DNS
 
 1. Create `.env` and replace **every** placeholder:
@@ -357,7 +375,7 @@ sudo systemctl enable docker
    cp /opt/homelab/.env.example /opt/homelab/.env
    ```
 
-   The commented-out variables at the end are only for the optional stacks. Leave `CROWDSEC_API_KEY` for step 6. The Cloudflare API token needs `Zone.Zone:Read` and `Zone.DNS:Edit`.
+   The variables at the end are only needed for the stacks you run. Leave `CROWDSEC_API_KEY` for step 6. The Cloudflare API token needs `Zone.Zone:Read` and `Zone.DNS:Edit`.
 
 2. Configure the dynamic DNS script. It does **not** read `.env`: edit `CF_API_TOKEN`, `DOMAIN` and the `PROXIED_ON` / `PROXIED_OFF` subdomain lists at the top of `/opt/homelab/cloudflare/cloudflare_ddns.sh`. Keep the real token only on the server, never in git. Then run it once and schedule it (see [Scheduled jobs](#scheduled-jobs)):
 
@@ -365,6 +383,8 @@ sudo systemctl enable docker
    chmod 700 /opt/homelab/cloudflare/cloudflare_ddns.sh
    /opt/homelab/cloudflare/cloudflare_ddns.sh
    ```
+
+> **Terraform (optional):** Terraform creates and manages the same records instead of the script's record updates. Each record's name and proxy setting lives in `terraform/variables.tf`. The DDNS script still keeps the IP current. Keep both name lists identical. You need Terraform 1.6 or newer, an R2 bucket for state, and a Cloudflare token with Zone:Read and DNS:Edit. Copy `terraform/backend.hcl.example` and `terraform/terraform.tfvars.example` to local files without `.example`, fill them in, then run `terraform -chdir=terraform init -backend-config=backend.hcl` and `terraform -chdir=terraform plan`. If the records already exist, import them first. Otherwise `apply` creates them.
 
 ### 6. Start the stack
 
@@ -459,7 +479,7 @@ If it fails, check that the tunnel shows **HEALTHY** in the Cloudflare dashboard
 
 `HAMH_MDNS_NETWORK_INTERFACE` in `stacks/home.yml` must be your LAN interface (`enp5s0` here). Otherwise matter-hub advertises on Docker bridges that Google Home can't reach.
 
-### Matter and Thread (optional)
+### Matter and Thread (matter stack)
 
 `stacks/matter.yml` lets Home Assistant control Matter devices directly, including Thread devices through a SONOFF Dongle-M.
 
@@ -467,7 +487,7 @@ If it fails, check that the tunnel shows **HEALTHY** in the Cloudflare dashboard
 
 They both speak Matter, but in opposite directions: **matter-hub exports HA to Matter, and matter-server imports Matter devices into HA.**
 
-|                    | **matter-hub** (`home.yml`, deployed)                         | **matter-server** (`matter.yml`, optional)                            |
+|                    | **matter-hub** (`home.yml`, deployed)                         | **matter-server** (`matter.yml`, profile `matter`)                            |
 | ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Matter role        | **Bridge.** HA appears *as* a Matter device                   | **Controller.** HA *commissions and controls* Matter devices          |
 | Direction          | HA → Google Home (or another controller)                      | Matter devices → HA                                                   |
@@ -505,7 +525,7 @@ Replace `enp5s0` with your LAN interface. It must match `BACKBONE_IF` and `PRIMA
 
 #### Start it and connect Home Assistant
 
-1. [Enable `matter.yml`](#enabling-an-optional-stack) (datasets from [step 2](#2-create-the-zfs-pool-and-datasets)), then:
+1. [Run the matter stack](#choosing-which-stacks-to-run) (datasets from [step 2](#2-create-the-zfs-pool-and-datasets)), then:
 
    ```bash
    cd /opt/homelab
@@ -550,9 +570,26 @@ Each container whose image changed is recreated, so expect a short outage for th
 
 After editing a template in `homelab/services/`, copy it to `/tank/services/` again. For the Caddy Dockerfile, follow with `docker compose up -d --build caddy`.
 
-### Enabling an optional stack
+### Choosing which stacks to run
 
-Uncomment its `include:` entry in `compose.yml` (`auth.yml`, `ci.yml`, `monitoring.yml` or `matter.yml`). The comment at the top of each stack file lists what else it needs: `.env` variables, datasets, and for Authentik a Caddy site and DNS record.
+Four stacks sit outside the core setup: `auth.yml` (Authentik), `ci.yml` (Forgejo runner), `monitoring.yml` (Uptime Kuma, Netdata) and `matter.yml` (matter-server, otbr). Each of their services has a Compose profile, and `COMPOSE_PROFILES` in `.env` decides which ones start:
+
+```bash
+# .env: comma-separated. Empty means the core stacks only.
+COMPOSE_PROFILES=ci,monitoring
+```
+
+To run a stack:
+
+1. **Select it.** Add it to `COMPOSE_PROFILES` in `.env`, and to `homelab_stacks` in `ansible/group_vars/all.yml` so Ansible prepares it. Keep the two lists identical.
+2. **Prepare the host.** Run `ansible-playbook site.yml --tags zfs,host_sysctl,templates`. That creates the stack's datasets, applies the Matter IPv6 sysctls (matter only), and copies the Forgejo runner config (ci only). Without Ansible, create the datasets from [step 2](#2-create-the-zfs-pool-and-datasets) and apply [Host IPv6 settings](#host-ipv6-settings) by hand. Create the datasets before the stack starts. Docker creates a missing bind-mount directory as a plain directory, and a dataset created on top of it later hides its contents.
+3. **Meet its requirements.** The comment at the top of each stack file lists them: `.env` variables, a Caddy site and DNS record for Authentik, and so on.
+4. **Start it.** Run `docker compose up -d`. Compose starts the core stacks and every selected one.
+
+Stack notes:
+
+- **`ci.yml`** runs a privileged docker-in-docker container. Register the runner with Forgejo before starting it.
+- **`matter.yml`** uses host networking, like matter-hub. Its TCP ports (5580 WebSocket, 8081 OTBR REST, 7586 OTBR web) are free, but matter-hub already holds UDP 5540, and the matterjs-server docs don't say which UDP port its Matter controller uses. After the first start, check `ss -ulpn | grep 5540` and `docker logs matter-server` for a bind error.
 
 ### Volume permissions
 
@@ -568,7 +605,7 @@ Then restart the affected containers, e.g. `docker compose restart filebrowser`.
 
 ### Scheduled jobs
 
-Add these with `crontab -e`:
+Add these with `crontab -e`, or let the Ansible `cron` role install them (see [step 3](#3-prepare-the-host)):
 
 ```bash
 # Keep Cloudflare DNS records pointed at the current public IP
@@ -626,7 +663,7 @@ ___
 
 ## Future roadmap
 
-1. Ansible and Kubernetes
+1. A Kubernetes target: one non-critical service, built with Kustomize and tested on kind
 2. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
 
 ___

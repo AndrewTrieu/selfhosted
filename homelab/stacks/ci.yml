@@ -1,9 +1,10 @@
-# NOT DEPLOYED — enable by uncommenting its include in compose.yml.
+# Profile: ci. Starts only when "ci" is listed in COMPOSE_PROFILES in .env.
 # Forgejo Actions runner; jobs run inside the privileged docker-in-docker sidecar.
 # Copy services/forgejo/runner/data/config.yaml to /tank first (see README) and
 # register the runner against Forgejo before starting it.
 services:
   docker-in-docker:
+    profiles: ["ci"]
     image: docker:dind
     container_name: docker_dind
     privileged: true
@@ -11,6 +12,7 @@ services:
     restart: always
 
   forgejo-runner:
+    profiles: ["ci"]
     image: data.forgejo.org/forgejo/runner:12
     container_name: runner
     depends_on:

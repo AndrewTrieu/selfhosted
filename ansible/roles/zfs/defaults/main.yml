@@ -26,22 +26,33 @@ zfs_datasets:
   - vaultwarden
   - wg-easy
 
-# README "Optional stacks".
-zfs_optional_datasets:
-  - authentik
-  - authentik/postgres
-  - authentik/redis
-  - forgejo/runner
-  - netdata
-  - uptimekuma
-  - matter-server
-  - otbr
+# Per-stack datasets, keyed by the name used in homelab_stacks and COMPOSE_PROFILES.
+zfs_stack_datasets:
+  auth:
+    - authentik
+    - authentik/postgres
+    - authentik/redis
+    - authentik/media
+    - authentik/custom-templates
+    - authentik/certs
+  ci:
+    - forgejo/runner
+  monitoring:
+    - uptimekuma
+    - netdata
+  matter:
+    - matter-server
+    - otbr
 
 # Database datasets need recordsize=16K (README step 4).
 zfs_recordsize_16k:
   - forgejo/postgres
   - airtrail/postgres
   - unbound/redis
-zfs_optional_recordsize_16k:
-  - authentik/postgres
-  - authentik/redis
+zfs_stack_recordsize_16k:
+  auth:
+    - authentik/postgres
+    - authentik/redis
+  ci: []
+  monitoring: []
+  matter: []

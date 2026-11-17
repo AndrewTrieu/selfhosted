@@ -21,10 +21,18 @@ homelab_template_files:
   - { src: unbound/custom.conf.d/cachedb.conf, dest: /tank/services/unbound/custom.conf.d/cachedb.conf }
   - { src: unbound/root.hints, dest: /tank/services/unbound/root.hints }
 
-# Optional stacks (README "Optional, for ci.yml").
-homelab_optional_template_dirs:
-  - /tank/services/forgejo/runner/data
-homelab_optional_template_files:
-  - { src: forgejo/runner/data/config.yaml, dest: /tank/services/forgejo/runner/data/config.yaml }
+# Per-stack config, keyed by the stack name used in homelab_stacks.
+homelab_stack_template_dirs:
+  auth: []
+  ci:
+    - /tank/services/forgejo/runner/data
+  monitoring: []
+  matter: []
+homelab_stack_template_files:
+  auth: []
+  ci:
+    - { src: forgejo/runner/data/config.yaml, dest: /tank/services/forgejo/runner/data/config.yaml }
+  monitoring: []
+  matter: []
 
 adguard_config_path: /tank/services/adguard/conf/AdGuardHome.yaml

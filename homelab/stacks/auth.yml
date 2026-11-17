@@ -1,9 +1,10 @@
-# NOT DEPLOYED — enable by uncommenting its include in compose.yml.
+# Profile: auth. Starts only when "auth" is listed in COMPOSE_PROFILES in .env.
 # Also requires: AUTH_DOMAIN + AUTHENTIK_* in .env, AUTH_DOMAIN passed to caddy
 # in stacks/edge.yml, the Authentik site block in the Caddyfile, "auth" in
 # cloudflare_ddns.sh, and the authentik ZFS datasets (see README).
 services:
   authentik-db:
+    profiles: ["auth"]
     image: postgres:16-alpine
     container_name: authentik-db
     restart: always
@@ -17,6 +18,7 @@ services:
       - proxy
 
   authentik-redis:
+    profiles: ["auth"]
     image: redis:latest
     container_name: authentik-redis
     restart: always
@@ -26,6 +28,7 @@ services:
       - proxy
 
   authentik-server:
+    profiles: ["auth"]
     image: ghcr.io/goauthentik/server:latest
     container_name: authentik-server
     restart: always
@@ -49,6 +52,7 @@ services:
       - proxy
 
   authentik-worker:
+    profiles: ["auth"]
     image: ghcr.io/goauthentik/server:latest
     container_name: authentik-worker
     restart: always

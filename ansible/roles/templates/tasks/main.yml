@@ -4,7 +4,7 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-  loop: "{{ homelab_template_dirs + (homelab_optional_template_dirs if homelab_optional_stacks | bool else []) }}"
+  loop: "{{ homelab_template_dirs + (homelab_stacks | map('extract', homelab_stack_template_dirs) | list | flatten) }}"
 
 - name: Copy config templates (never overwrites an existing server file)
   ansible.builtin.copy:
@@ -12,7 +12,7 @@
     dest: "{{ item.dest }}"
     force: false
     mode: "0644"
-  loop: "{{ homelab_template_files + (homelab_optional_template_files if homelab_optional_stacks | bool else []) }}"
+  loop: "{{ homelab_template_files + (homelab_stacks | map('extract', homelab_stack_template_files) | list | flatten) }}"
   loop_control:
     label: "{{ item.dest }}"
 

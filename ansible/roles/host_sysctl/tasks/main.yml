@@ -8,4 +8,4 @@
     reload: true
     state: present
   loop: "{{ host_sysctl_settings }}"
-  when: homelab_optional_stacks | bool
+  when: "'matter' in homelab_stacks"

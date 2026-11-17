@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Infrastructure-as-config for a single-host homelab: one Docker Compose project with a custom-built Caddy reverse proxy in front and persistent data on a ZFS pool. There is no application code, build system or test suite. "Changes" are edits to Compose YAML, the Caddyfile, a Dockerfile, a bash script and `README.md`, which is the full setup runbook.
+Infrastructure-as-config for a single-host homelab: one Docker Compose project with a custom-built Caddy reverse proxy in front and persistent data on a ZFS pool. There is no application code. "Changes" are edits to Compose YAML, the Caddyfile, a Dockerfile, a bash script, the Ansible roles, the Terraform config and `README.md`, which is the full setup runbook. The Ansible and Terraform parts are checked by `.forgejo/workflows/ci.yml`.
 
 ## Repo ↔ server mapping (paths are hardcoded)
 
@@ -19,7 +19,7 @@ Infrastructure-as-config for a single-host homelab: one Docker Compose project w
 - Each include passes `env_file: .env`, so `${VARS}` resolve from the root `.env`.
 - Relative paths in a stack file resolve from `stacks/` (hence `../Caddyfile` in `edge.yml`).
 - Deployed stacks: `edge` (caddy, crowdsec, cloudflared), `dns-vpn`, `apps`, `admin`, `home` (Home Assistant, matter-hub).
-- `auth.yml` (Authentik), `ci.yml` (Forgejo runner + docker-in-docker) and `monitoring.yml` (Uptime Kuma, Netdata) and `matter.yml` (matter.js Matter controller + OpenThread Border Router for a network-attached SONOFF Dongle-M) are defined but **not deployed**. Their includes are commented out, and the header comment of each file lists what else enabling it requires.
+- `auth.yml` (Authentik), `ci.yml` (Forgejo runner + docker-in-docker), `monitoring.yml` (Uptime Kuma, Netdata) and `matter.yml` (matter-server, otbr) each have a Compose profile (`auth`, `ci`, `monitoring`, `matter`). They start only when listed in `COMPOSE_PROFILES` in `.env`. Their header comment lists what they need.
 
 ## Commands
 
@@ -41,6 +41,18 @@ bash -n homelab/cloudflare/cloudflare_ddns.sh               # syntax-check the D
 
 The server's `/opt/homelab/caddy` is a standalone Caddy binary for host-side `caddy fmt`/`adapt`. It lacks the plugins, so use the container for `validate`.
 
+## Optional automation: Ansible, Terraform and CI
+
+The README's manual steps are the primary path. Ansible and Terraform are optional and must stay equivalent to those steps. Update the matching README note when either changes.
+
+
+- **`ansible/`** bootstraps the host. The inventory uses `ansible_connection: local`, because the control node is the server itself. Run `ansible-playbook site.yml --check --diff -K` first. `zfs-pool.yml` is destructive and needs `-e zfs_pool_create=true`; never add it to `site.yml`.
+- Ansible templates copy with `force: false`. Never change that, because server files hold real secrets and runtime state. Do not set `mode` on directories that already exist.
+- `homelab_user`, `zfs_pool_disks` and the inventory hold placeholders in git. Keep real values in a local, uncommitted override.
+- **`terraform/`** optionally manages the DDNS record set. Terraform owns each record's name and `proxied` setting, and ignores `content`, which DDNS updates. State is in R2 (`terraform/backend.hcl`, gitignored). The API token comes from `TF_VAR_cloudflare_api_token`, and `terraform.tfvars` is gitignored.
+- `homelab_stacks` (Ansible) lists the stacks to prepare: datasets, Matter sysctls and runner config. It must match `COMPOSE_PROFILES` in `.env`; keep both in sync.
+- Run `terraform -chdir=terraform plan` and review it before any `apply`. CI never applies. The provider version is pinned in `versions.tf`.
+
 ## Architecture
 
 - **Ingress:** Caddy is the only service exposing 80/443. It is a custom xcaddy build with `caddy-dns/cloudflare` (DNS-01), `caddy-cloudflare-ip` (`trusted_proxies cloudflare`), `caddy-crowdsec-bouncer` and `caddy-security`. A directive from a new plugin requires a Dockerfile change and a rebuild.
@@ -56,7 +68,7 @@ Keep all of these in sync:
 1. A service in the right `stacks/*.yml` (on `proxy`, with data under `/tank/services/<name>`).
 2. The `X_DOMAIN` entry in the caddy `environment:` in `stacks/edge.yml`, plus an `{env.X_DOMAIN}` site in the `Caddyfile`.
 3. `.env.example`.
-4. `cloudflare/cloudflare_ddns.sh` `PROXIED_ON`/`PROXIED_OFF`. The script does not read `.env` and keeps its own `CF_API_TOKEN`/`DOMAIN`. The repo copy holds placeholders; never commit the real token from the server copy.
+4. `cloudflare/cloudflare_ddns.sh` `PROXIED_ON`/`PROXIED_OFF`, **and** `terraform/variables.tf` `proxied_names`/`dns_only_names`. These are the same list in two places: keep them identical. The script does not read `.env` and keeps its own `CF_API_TOKEN`/`DOMAIN`. The repo copy holds placeholders; never commit the real token from the server copy. After adding the name to Terraform, run `plan` and then `apply`, so the new record exists.
 5. `README.md`: the services table, the domain lists, the ZFS dataset list (`recordsize=16K` for Postgres/Redis), the template-copy step, the mermaid diagram and the directory tree.
 
 ## Gotchas
@@ -67,3 +79,4 @@ Keep all of these in sync:
 - Home Assistant keeps HTTP settings in `/tank/services/homeassistant/config/.storage/http`, not `configuration.yaml`; a YAML `http:` block is read once, then ignored. Reverse-proxy trust (`use_x_forwarded_for`, `trusted_proxies: 172.30.0.0/16`) must be in `data.stable`. Changes land in `data.pending` and revert after 5 minutes unless confirmed (`error: not_promoted`); to set them without the UI, stop HA and move them into `stable`. A `400` through Caddy plus a "not set-up for reverse proxies" log line means `stable` lacks them.
 - A new subdomain can stay unresolvable on the LAN/VPN after its record is created: Unbound caches the empty answer for up to 30 minutes and persists it in Redis. `unbound-control` is disabled, so to clear it run `docker exec unbound-redis redis-cli FLUSHALL`, then restart `unbound` and then `adguard`.
 - Most images use `:latest`, so `docker compose pull` can bring in breaking upgrades. Pinned: Forgejo `15`, Postgres `15`, Caddy `2.10.2`, matter-hub `2.0.59`.
+- A ZFS dataset mounts over its directory and hides whatever was there. Create the dataset before the service's data goes in, or move the data into it. The `zfs` role refuses to create a dataset over a directory that already has files.

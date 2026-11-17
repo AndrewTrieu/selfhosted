@@ -1,6 +1,7 @@
-# NOT DEPLOYED — enable by uncommenting its include in compose.yml.
+# Profile: monitoring. Starts only when "monitoring" is listed in COMPOSE_PROFILES in .env.
 services:
   uptimekuma:
+    profiles: ["monitoring"]
     image: louislam/uptime-kuma:latest
     container_name: uptime-kuma
     restart: always
@@ -10,6 +11,7 @@ services:
       - /tank/services/uptimekuma:/app/data
 
   netdata:
+    profiles: ["monitoring"]
     image: netdata/netdata:latest
     container_name: netdata
     restart: always

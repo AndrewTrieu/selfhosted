@@ -1,4 +1,4 @@
-# NOT DEPLOYED — enable by uncommenting its include in compose.yml.
+# Profile: matter. Starts only when "matter" is listed in COMPOSE_PROFILES in .env.
 # Lets Home Assistant itself control Matter devices (Wi-Fi/Ethernet and, via the
 # SONOFF Dongle-M, Thread). Not the same as matter-hub in home.yml; see README.
 # Requires: OTBR_NETWORK_DEVICE in .env, the Dongle-M in "Thread RCP" mode, the
@@ -7,6 +7,7 @@ services:
   # Matter controller (matter.js server, successor of the archived
   # python-matter-server). HA's Matter integration connects to ws://localhost:5580/ws.
   matter-server:
+    profiles: ["matter"]
     image: ghcr.io/matter-js/matterjs-server:stable
     container_name: matter-server
     restart: always
@@ -24,6 +25,7 @@ services:
   # this container runs the border router and talks to the dongle over TCP.
   # HA's OTBR integration connects to http://localhost:8081.
   otbr:
+    profiles: ["matter"]
     image: ghcr.io/ownbee/hass-otbr-docker:latest
     container_name: otbr
     restart: always

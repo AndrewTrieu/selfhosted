@@ -32,7 +32,7 @@
     paths: "/{{ zfs_pool_name }}/services/{{ item }}"
     hidden: true
     file_type: any
-  loop: "{{ zfs_datasets + (zfs_optional_datasets if homelab_optional_stacks | bool else []) }}"
+  loop: "{{ zfs_datasets + (homelab_stacks | map('extract', zfs_stack_datasets) | list | flatten) }}"
   register: zfs_mountpoint_contents
   when: (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
   loop_control:
@@ -51,14 +51,14 @@
 - name: Create missing service datasets
   ansible.builtin.command:
     argv: [zfs, create, -p, "{{ zfs_pool_name }}/services/{{ item }}"]
-  loop: "{{ zfs_datasets + (zfs_optional_datasets if homelab_optional_stacks | bool else []) }}"
+  loop: "{{ zfs_datasets + (homelab_stacks | map('extract', zfs_stack_datasets) | list | flatten) }}"
   changed_when: true
   when: (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
 
 - name: Read recordsize of database datasets
   ansible.builtin.command:
     argv: [zfs, get, -H, -o, value, recordsize, "{{ zfs_pool_name }}/services/{{ item }}"]
-  loop: "{{ zfs_recordsize_16k + (zfs_optional_recordsize_16k if homelab_optional_stacks | bool else []) }}"
+  loop: "{{ zfs_recordsize_16k + (homelab_stacks | map('extract', zfs_stack_recordsize_16k) | list | flatten) }}"
   register: zfs_recordsize
   changed_when: false
   check_mode: false
@@ -72,11 +72,11 @@
   changed_when: true
   when: item.stdout != '16K'
 
-- name: Give matter-server its unprivileged owner (optional stacks)
+- name: Give matter-server its unprivileged owner (matter stack)
   ansible.builtin.file:
     path: "/{{ zfs_pool_name }}/services/matter-server"
     state: directory
     owner: "1000"
     group: "1000"
     mode: "0755"
-  when: homelab_optional_stacks | bool
+  when: "'matter' in homelab_stacks"
