@@ -1,7 +1,7 @@
 services:
   caddy:
     build:
-      context: /tank/services/caddy
+      context: ${HOMELAB_DATA:-/tank/services}/caddy
       dockerfile: Dockerfile
     container_name: caddy
     restart: always
@@ -13,9 +13,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ../Caddyfile:/etc/caddy/Caddyfile:ro
-      - /tank/services/caddy/config:/config
-      - /tank/services/caddy/data:/data
-      - /tank/services/site:/srv/site:ro
+      - ${HOMELAB_DATA:-/tank/services}/caddy/config:/config
+      - ${HOMELAB_DATA:-/tank/services}/caddy/data:/data
+      - ${HOMELAB_DATA:-/tank/services}/site:/srv/site:ro
     environment:
       VAULT_DOMAIN: ${VAULT_DOMAIN}
       TWOFAUTH_DOMAIN: ${TWOFAUTH_DOMAIN}
@@ -27,6 +27,7 @@ services:
       REALITY_DOMAIN: ${REALITY_DOMAIN}
       AIRTRAIL_DOMAIN: ${AIRTRAIL_DOMAIN}
       HA_DOMAIN: ${HA_DOMAIN}
+      ROOT_REDIRECT_URL: ${ROOT_REDIRECT_URL}
       ROOT_DOMAIN: ${ROOT_DOMAIN}
       CF_API_TOKEN: ${CF_API_TOKEN}
       CROWDSEC_API_KEY: ${CROWDSEC_API_KEY}
@@ -62,10 +63,10 @@ services:
         crowdsecurity/appsec-virtual-patching
       GID: "1000"
     volumes:
-      - /tank/services/crowdsec/data:/var/lib/crowdsec/data
-      - /tank/services/crowdsec/config:/etc/crowdsec
-      - /tank/services/crowdsec/acquis.d:/etc/crowdsec/acquis.d
-      - /tank/services/caddy/data:/var/log/caddy:ro
+      - ${HOMELAB_DATA:-/tank/services}/crowdsec/data:/var/lib/crowdsec/data
+      - ${HOMELAB_DATA:-/tank/services}/crowdsec/config:/etc/crowdsec
+      - ${HOMELAB_DATA:-/tank/services}/crowdsec/acquis.d:/etc/crowdsec/acquis.d
+      - ${HOMELAB_DATA:-/tank/services}/caddy/data:/var/log/caddy:ro
     networks:
       - proxy
 

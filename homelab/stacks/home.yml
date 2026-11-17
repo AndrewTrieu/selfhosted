@@ -1,5 +1,8 @@
+# Profile: home. Starts only when "home" is listed in COMPOSE_PROFILES in .env.
+# Home Assistant needs no special hardware. matter-hub bridges it to Google Home.
 services:
   homeassistant:
+    profiles: ["home"]
     image: ghcr.io/home-assistant/home-assistant:stable
     container_name: homeassistant
     restart: always
@@ -7,15 +10,16 @@ services:
     # Caddy reaches it via host.docker.internal:8123.
     network_mode: host
     environment:
-      TZ: Europe/Helsinki
+      TZ: ${HOMELAB_TZ:-UTC}
     volumes:
-      - /tank/services/homeassistant/config:/config
+      - ${HOMELAB_DATA:-/tank/services}/homeassistant/config:/config
       - /etc/localtime:/etc/localtime:ro
       - /run/dbus:/run/dbus:ro
 
   # Exposes selected HA entities to Google Home (or any Matter controller) as a
   # local Matter bridge. Web UI: http://<host-lan-ip>:8482 (basic auth).
   matter-hub:
+    profiles: ["home"]
     image: ghcr.io/riddix/home-assistant-matter-hub:2.0.59
     container_name: matter-hub
     restart: always
@@ -32,4 +36,4 @@ services:
       # Only advertise the LAN NIC, not Docker bridges controllers can't reach
       HAMH_MDNS_NETWORK_INTERFACE: enp5s0
     volumes:
-      - /tank/services/matter-hub:/data
+      - ${HOMELAB_DATA:-/tank/services}/matter-hub:/data

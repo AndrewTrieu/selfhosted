@@ -7,7 +7,7 @@ services:
       - 9443:9443
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /tank/services/portainer:/data
+      - ${HOMELAB_DATA:-/tank/services}/portainer:/data
 
   dozzle:
     image: amir20/dozzle:latest
@@ -22,8 +22,8 @@ services:
     image: ghcr.io/mhsanaei/3x-ui:latest
     container_name: 3xui_app
     volumes:
-      - /tank/services/3x-ui/db:/etc/x-ui
-      - /tank/services/3x-ui/cert:/root/cert
+      - ${HOMELAB_DATA:-/tank/services}/3x-ui/db:/etc/x-ui
+      - ${HOMELAB_DATA:-/tank/services}/3x-ui/cert:/root/cert
     environment:
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"

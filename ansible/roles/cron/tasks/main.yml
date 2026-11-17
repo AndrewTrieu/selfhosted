@@ -16,6 +16,6 @@
     weekday: "{{ item.weekday }}"
     job: "{{ item.job }}"
     state: present
-  loop: "{{ cron_jobs }}"
+  loop: "{{ cron_jobs + (cron_zfs_jobs if homelab_use_zfs | bool else []) }}"
   loop_control:
     label: "{{ item.name }}"

@@ -1,7 +1,7 @@
-# Profile: ci. Starts only when "ci" is listed in COMPOSE_PROFILES in .env.
-# Forgejo Actions runner; jobs run inside the privileged docker-in-docker sidecar.
-# Copy services/forgejo/runner/data/config.yaml to /tank first (see README) and
-# register the runner against Forgejo before starting it.
+# Profile: ci. Turn on by adding "ci" to COMPOSE_PROFILES in .env.
+# This runs the CI runner on this machine. Do not run it on the server that hosts
+# your other services: CI jobs get powerful access to the machine they run on.
+# Run the runner on a separate VM instead. See "Setting up the CI runner" in the README.
 services:
   docker-in-docker:
     profiles: ["ci"]
@@ -22,6 +22,6 @@ services:
       DOCKER_HOST: tcp://docker-in-docker:2375
     user: 1001:1001
     volumes:
-      - /tank/services/forgejo/runner/data:/data
+      - ${HOMELAB_DATA:-/tank/services}/forgejo/runner/data:/data
     restart: always
     command: forgejo-runner daemon --config config.yaml

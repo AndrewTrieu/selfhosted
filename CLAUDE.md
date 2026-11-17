@@ -9,7 +9,7 @@ Infrastructure-as-config for a single-host homelab: one Docker Compose project w
 ## Repo ↔ server mapping (paths are hardcoded)
 
 - The contents of `homelab/` are deployed to **`/opt/homelab`** on the server. `/opt/homelab` is not a git checkout, so the repo and the server can drift apart. When asked to change "the deployment", compare against `/opt/homelab` first.
-- All persistent state lives under **`/tank/services/<service>/...`**, bind-mounted by absolute path; there are no named volumes.
+- All persistent state lives under **`$HOMELAB_DATA/<service>/...`** (default `/tank/services`, set in `.env`), bind-mounted by absolute path; there are no named volumes. Ansible's `homelab_data_root` must match it.
 - `homelab/services/**` are **templates copied once** into the same paths under `/tank/services/` (README "Setup" step 4), and containers mount the `/tank` copy. That includes the Caddy `Dockerfile`: `stacks/edge.yml` builds from `/tank/services/caddy`, not from the repo. Editing a template changes nothing on the server until it is copied over.
 
 ## Compose layout
@@ -18,7 +18,7 @@ Infrastructure-as-config for a single-host homelab: one Docker Compose project w
 - Define networks only in the root; a duplicate definition in a stack file conflicts.
 - Each include passes `env_file: .env`, so `${VARS}` resolve from the root `.env`.
 - Relative paths in a stack file resolve from `stacks/` (hence `../Caddyfile` in `edge.yml`).
-- Deployed stacks: `edge` (caddy, crowdsec, cloudflared), `dns-vpn`, `apps`, `admin`, `home` (Home Assistant, matter-hub).
+- Core stacks (always start): `edge` (caddy, crowdsec, cloudflared), `dns-vpn`, `apps`, `admin`. Optional stacks start only when listed in `COMPOSE_PROFILES`: `home` (Home Assistant, matter-hub), `auth`, `monitoring`, `matter`, and `ci`, which should only run on a separate VM.
 - `auth.yml` (Authentik), `ci.yml` (Forgejo runner + docker-in-docker), `monitoring.yml` (Uptime Kuma, Netdata) and `matter.yml` (matter-server, otbr) each have a Compose profile (`auth`, `ci`, `monitoring`, `matter`). They start only when listed in `COMPOSE_PROFILES` in `.env`. Their header comment lists what they need.
 
 ## Commands

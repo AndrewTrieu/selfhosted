@@ -97,12 +97,14 @@
     respond 404
 }
 
+
+
 {env.ROOT_DOMAIN} {
     import sec_headers
     import dns_cf
     encode zstd gzip
 
-    redir https://flowcv.com/
+    redir {env.ROOT_REDIRECT_URL}
 }
 
 

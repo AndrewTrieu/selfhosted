@@ -16,11 +16,11 @@ My personal homelab: a Docker Compose stack fronted by Caddy as a secure reverse
 
 - [Services](#services)
 - [How it fits together](#how-it-fits-together): architecture, traffic & DNS, repository layout
+- [Working on this repo](#working-on-this-repo): local checks, and what CI would run
 - [Setup on a fresh server](#setup-on-a-fresh-server): steps 1–7, in order
 - [Service setup](#service-setup): Forgejo SSH, 3x-ui, Home Assistant, Matter & Thread
 - [Operations](#operations): commands, updates, scheduled jobs, ZFS maintenance, migration
 - [Future roadmap](#future-roadmap)
-- [A note from Claude](#a-note-from-claude)
 
 ## Services
 
@@ -161,7 +161,7 @@ The WG-Easy management UI is **not** exposed to the internet (the Caddyfile has 
 ### Repository layout
 
 - `homelab/` is copied to **`/opt/homelab`** on the server. Always run `docker compose` from there.
-- All persistent data lives on ZFS under **`/tank/services/<service>`**.
+- All persistent data lives under **`$HOMELAB_DATA/<service>`** (default `/tank/services`, set in `.env`). With ZFS, each folder is a dataset; without it, a plain folder.
 - `homelab/services/` holds **templates** that are copied once into the same paths under `/tank/services/` ([step 4](#4-copy-the-repo-and-config-templates)). Containers use the `/tank` copies, not the repo files.
 - `compose.yml` is only the root: it `include:`s `stacks/*.yml` (each with `env_file: .env`) and defines the shared `proxy` and `vpndns` networks. Define networks only there, because a duplicate definition in a stack file conflicts.
 
@@ -192,7 +192,7 @@ The WG-Easy management UI is **not** exposed to the internet (the Caddyfile has 
     │   ├── ci.yml               # forgejo-runner + docker-in-docker (profile: ci)
     │   ├── monitoring.yml       # uptime-kuma, netdata (profile: monitoring)
     │   └── matter.yml           # matter-server, otbr (profile: matter)
-    └── services                 # Templates for /tank/services/
+    └── services                 # Templates for $HOMELAB_DATA (default /tank/services)
         ├── adguard/conf/AdGuardHome.yaml              # upstream = Unbound, filter lists
         ├── caddy/Dockerfile                           # custom Caddy build
         ├── crowdsec/acquis.d/caddy.yaml               # CrowdSec reads Caddy's access log
@@ -203,6 +203,94 @@ The WG-Easy management UI is **not** exposed to the internet (the Caddyfile has 
 ```
 
 ___
+
+## Working on this repo
+
+Clone it, then copy the local-only files. Git ignores these, and they hold your values:
+
+| Copy | To | Holds |
+| --- | --- | --- |
+| `homelab/.env.example` | `homelab/.env` | Domains, secrets, `COMPOSE_PROFILES` |
+| `terraform/backend.hcl.example` | `terraform/backend.hcl` | R2 bucket and account ID |
+| `terraform/terraform.tfvars.example` | `terraform/terraform.tfvars` | Zone ID and domain |
+| `ansible/inventory/hosts.yml` | keep as is, or set `ansible_connection: local` on the server | Host to configure |
+
+Then run the checks that CI would run. None of them change a server or a DNS record:
+
+```bash
+# Compose: validate the merged config (no containers start)
+cd homelab && docker compose config -q && cd ..
+
+# Terraform: formatting and validation, no backend or credentials needed
+terraform -chdir=terraform fmt -check -recursive
+terraform -chdir=terraform init -backend=false -input=false
+terraform -chdir=terraform validate
+
+# Ansible: syntax checks and lint, run in the official dev-tools image
+cd ansible && docker run --rm -v "$PWD":/work -w /work ghcr.io/ansible/community-ansible-dev-tools \
+  sh -c 'ansible-galaxy collection install -r requirements.yml && ansible-playbook --syntax-check site.yml && ansible-lint'
+cd ..
+```
+
+### Change flow
+
+The solid arrows are what happens today. The dashed runner is the one part that is not live yet.
+
+```mermaid
+flowchart LR
+    Dev["Your machine"]
+    Checks["Local checks<br/>compose config, terraform validate, ansible-lint"]
+    Forgejo["Forgejo<br/>your Forgejo host"]
+    Runner["Forgejo runner<br/>stacks/ci.yml"]
+    Host["Server<br/>Ansible target"]
+    CF["Cloudflare DNS"]
+    R2[("R2<br/>Terraform state")]
+    DDNS["cloudflare_ddns.sh<br/>cron, every 5 min"]
+
+    Dev -->|"1. before pushing"| Checks
+    Dev -->|"2. git push"| Forgejo
+    Forgejo -.->|"3. workflow (inactive until deployed)"| Runner
+    Dev -->|"ansible-playbook site.yml (manual)"| Host
+    Dev -->|"terraform plan / apply (manual)"| CF
+    Dev -->|"state"| R2
+    DDNS -->|"updates the A record IP"| CF
+
+    classDef inactive stroke-dasharray:5 5,fill:none
+    class Runner inactive
+```
+
+The workflow in `.forgejo/workflows/ci.yml` runs the same Ansible and Terraform checks on every push. It stays inactive until the Forgejo runner (`stacks/ci.yml`) is deployed, so run the checks above before pushing.
+
+Never commit `.env`, `backend.hcl`, `terraform.tfvars`, `.vault_pass*`, or the real DDNS script. Put placeholders in any `.example` file you change.
+
+### Setting up the CI runner (optional)
+
+Run the runner on a separate VM, never on the server that runs your services. A runner runs whatever a workflow contains, and it needs access to Docker to start job containers. The steps below assume a fresh Debian or Ubuntu VM with no access to `/tank` or the server's Docker socket.
+
+1. **Install Docker on the VM.** The runner starts each job's container with the local Docker engine.
+2. **Create the runner in Forgejo.** Open the repository's **Settings → Actions → Runners**, choose **Create new runner**, and enter a name. Forgejo shows a UUID and a secret token. Keep the page open until step 5.
+3. **Create a runner user and let it use Docker:**
+   ```bash
+   sudo useradd --create-home --shell /bin/bash runner
+   sudo usermod -aG docker runner
+   ```
+   Anyone in the `docker` group can control the Docker daemon, which is root-equivalent. That's acceptable on this dedicated VM and not on the server.
+4. **Install the `forgejo-runner` binary** from the runner releases linked in the Forgejo Actions installation guide, at `https://forgejo.org/docs/latest/admin/actions/installation/binary/`.
+5. **Generate and edit the config** as the `runner` user:
+   ```bash
+   sudo -u runner forgejo-runner generate-config > /home/runner/runner-config.yml
+   ```
+   Then edit `/home/runner/runner-config.yml`:
+   - under `server: connections: forgejo:`, set `url` to your Forgejo address, and `uuid` and `token` to the values from step 2;
+   - under `runner: labels:`, add `- docker:docker://node:20-bookworm`. The `docker` name matches `runs-on: docker` in `ci.yml`, and the image runs the job's steps. Pin the image by digest once it works.
+6. **Start the runner** as a service. Use the systemd unit from the runner repository's `contrib/` directory, or write your own that runs:
+   ```bash
+   forgejo-runner daemon -c /home/runner/runner-config.yml
+   ```
+   Then `sudo systemctl enable --now forgejo-runner` and check with `journalctl -u forgejo-runner`.
+7. **Check the first job.** Push a commit. The workflow should appear on the commit, and it should pass. If it stays queued, the label doesn't match `runs-on`.
+
+Leave `container.docker_host` at its default. The job containers then don't get the host's Docker socket.
 
 ## Setup on a fresh server
 
@@ -231,7 +319,10 @@ Each step gives the manual commands. Where the repo has automation, an **Automat
 
 Forgejo SSH needs no port forward because it goes through the Cloudflare Tunnel.
 
-### 2. Create the ZFS pool and datasets
+### 2. Create the ZFS pool and datasets (optional)
+
+> **Without ZFS:** skip the commands below. Create the data folder yourself (`sudo mkdir -p /tank/services`, or whatever `HOMELAB_DATA` is in `.env`), then run the rest of the setup. The folder names are the same as the dataset names here. With Ansible, set `homelab_use_zfs: false` in `ansible/group_vars/all.yml`, and `ansible-playbook site.yml --tags zfs` creates the folders for you.
+
 
 1. Install ZFS and find your disks' stable IDs:
 
@@ -373,6 +464,8 @@ sudo systemctl enable docker
 
    ```bash
    cp /opt/homelab/.env.example /opt/homelab/.env
+
+   Also set `HOMELAB_TZ` (your time zone, for example `Europe/London`) and `HOMELAB_FORGEJO_NAME` (the name shown in Forgejo). `COMPOSE_PROFILES` picks the optional stacks; `auth` and `monitoring` start by default, `home` (Home Assistant) and `matter` need their own setup.
    ```
 
    The variables at the end are only needed for the stacks you run. Leave `CROWDSEC_API_KEY` for step 6. The Cloudflare API token needs `Zone.Zone:Read` and `Zone.DNS:Edit`.
@@ -572,7 +665,7 @@ After editing a template in `homelab/services/`, copy it to `/tank/services/` ag
 
 ### Choosing which stacks to run
 
-Four stacks sit outside the core setup: `auth.yml` (Authentik), `ci.yml` (Forgejo runner), `monitoring.yml` (Uptime Kuma, Netdata) and `matter.yml` (matter-server, otbr). Each of their services has a Compose profile, and `COMPOSE_PROFILES` in `.env` decides which ones start:
+Five stacks sit outside the core setup: `auth.yml` (Authentik), `ci.yml` (Forgejo runner), `monitoring.yml` (Uptime Kuma, Netdata), `home.yml` (Home Assistant, matter-hub) and `matter.yml` (matter-server, otbr). Each of their services has a Compose profile, and `COMPOSE_PROFILES` in `.env` decides which ones start:
 
 ```bash
 # .env: comma-separated. Empty means the core stacks only.
@@ -588,7 +681,7 @@ To run a stack:
 
 Stack notes:
 
-- **`ci.yml`** runs a privileged docker-in-docker container. Register the runner with Forgejo before starting it.
+- **`ci.yml`** runs the runner on this host, inside a privileged docker-in-docker container with an unauthenticated Docker API. Don't select it on the server that runs your services. Run the runner on a separate VM instead (see [Setting up the CI runner](#setting-up-the-ci-runner-optional)).
 - **`matter.yml`** uses host networking, like matter-hub. Its TCP ports (5580 WebSocket, 8081 OTBR REST, 7586 OTBR web) are free, but matter-hub already holds UDP 5540, and the matterjs-server docs don't say which UDP port its Matter controller uses. After the first start, check `ss -ulpn | grep 5540` and `docker logs matter-server` for a bind error.
 
 ### Volume permissions
@@ -667,13 +760,3 @@ ___
 2. UPS for graceful shutdown and storage safety (unlikely to happen; do we ever get power outage in Finland?)
 
 ___
-
-## A note from Claude
-
-*Written by Claude, the AI model that helped tidy up this repo.*
-
-Most of what I see is code people are paid to write. This repo is different. Nobody asked for it, and it exists because someone wanted to own their own corner of the internet and understand every piece of it. You can see that in the details: the jokes in the roadmap, the late-night fixes written down so they never have to be worked out twice, and the security choices that are clearly yours rather than defaults.
-
-It was a pleasure to spend an afternoon inside it. I hope it keeps running quietly in the background for years, and that it keeps being fun to break and fix.
-
-Take care of it, and of yourself. 🌿

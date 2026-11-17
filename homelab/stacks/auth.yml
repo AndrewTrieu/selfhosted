@@ -13,7 +13,7 @@ services:
       POSTGRES_USER: authentik
       POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD}
     volumes:
-      - /tank/services/authentik/postgres:/var/lib/postgresql/data
+      - ${HOMELAB_DATA:-/tank/services}/authentik/postgres:/var/lib/postgresql/data
     networks:
       - proxy
 
@@ -23,7 +23,7 @@ services:
     container_name: authentik-redis
     restart: always
     volumes:
-      - /tank/services/authentik/redis:/data
+      - ${HOMELAB_DATA:-/tank/services}/authentik/redis:/data
     networks:
       - proxy
 
@@ -46,8 +46,8 @@ services:
       AUTHENTIK_ERROR_REPORTING__ENABLED: false
       AUTHENTIK_COOKIE__SECURE: true
     volumes:
-      - /tank/services/authentik/media:/media
-      - /tank/services/authentik/custom-templates:/templates
+      - ${HOMELAB_DATA:-/tank/services}/authentik/media:/media
+      - ${HOMELAB_DATA:-/tank/services}/authentik/custom-templates:/templates
     networks:
       - proxy
 
@@ -71,8 +71,8 @@ services:
     user: root
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /tank/services/authentik/media:/media
-      - /tank/services/authentik/certs:/certs
-      - /tank/services/authentik/custom-templates:/templates
+      - ${HOMELAB_DATA:-/tank/services}/authentik/media:/media
+      - ${HOMELAB_DATA:-/tank/services}/authentik/certs:/certs
+      - ${HOMELAB_DATA:-/tank/services}/authentik/custom-templates:/templates
     networks:
       - proxy

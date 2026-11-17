@@ -2,7 +2,7 @@
 # Lets Home Assistant itself control Matter devices (Wi-Fi/Ethernet and, via the
 # SONOFF Dongle-M, Thread). Not the same as matter-hub in home.yml; see README.
 # Requires: OTBR_NETWORK_DEVICE in .env, the Dongle-M in "Thread RCP" mode, the
-# host IPv6 sysctls and the /tank/services/{matter-server,otbr} datasets (README).
+# host IPv6 sysctls and the ${HOMELAB_DATA:-/tank/services}/{matter-server,otbr} datasets (README).
 services:
   # Matter controller (matter.js server, successor of the archived
   # python-matter-server). HA's Matter integration connects to ws://localhost:5580/ws.
@@ -14,12 +14,12 @@ services:
     network_mode: host          # required for Matter (mDNS + IPv6 to Thread devices)
     read_only: true
     environment:
-      TZ: Europe/Helsinki
+      TZ: ${HOMELAB_TZ:-UTC}
       STORAGE_PATH: /data
       PORT: 5580
       PRIMARY_INTERFACE: enp5s0 # LAN NIC, same as matter-hub's mDNS interface
     volumes:
-      - /tank/services/matter-server:/data   # owned by 1000:1000 (container is unprivileged)
+      - ${HOMELAB_DATA:-/tank/services}/matter-server:/data   # owned by 1000:1000 (container is unprivileged)
 
   # OpenThread Border Router. The Dongle-M is only the Thread radio (RCP);
   # this container runs the border router and talks to the dongle over TCP.
@@ -49,4 +49,4 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     volumes:
-      - /tank/services/otbr:/data/thread
+      - ${HOMELAB_DATA:-/tank/services}/otbr:/data/thread

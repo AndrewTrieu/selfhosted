@@ -1,9 +1,13 @@
 ---
+# Storage for the service data. With homelab_use_zfs (default), this makes ZFS datasets.
+# Without it, this makes plain folders under homelab_data_root with the same names.
+
 - name: Install ZFS and auto-snapshot packages
   ansible.builtin.apt:
     name: "{{ zfs_packages }}"
     state: present
     update_cache: true
+  when: homelab_use_zfs | bool
 
 - name: Check that the pool exists
   ansible.builtin.command:
@@ -12,12 +16,14 @@
   changed_when: false
   failed_when: false
   check_mode: false
+  when: homelab_use_zfs | bool
 
 - name: Stop unless the pool exists (create it with zfs-pool.yml)
   ansible.builtin.assert:
     that:
       - zfs_pool_check.rc == 0
     fail_msg: "Pool {{ zfs_pool_name }} not found. Create it with zfs-pool.yml first."
+  when: homelab_use_zfs | bool
 
 - name: List existing service datasets
   ansible.builtin.command:
@@ -26,6 +32,7 @@
   changed_when: false
   failed_when: false
   check_mode: false
+  when: homelab_use_zfs | bool
 
 - name: Look for existing data under the mountpoints of missing datasets
   ansible.builtin.find:
@@ -34,7 +41,9 @@
     file_type: any
   loop: "{{ zfs_datasets + (homelab_stacks | map('extract', zfs_stack_datasets) | list | flatten) }}"
   register: zfs_mountpoint_contents
-  when: (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
+  when:
+    - homelab_use_zfs | bool
+    - (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
   loop_control:
     label: "{{ item }}"
 
@@ -44,20 +53,24 @@
     that:
       - item.skipped | default(false) or item.matched == 0
     fail_msg: "Mountpoint for a missing dataset already contains files. Move or remove them first."
-  loop: "{{ zfs_mountpoint_contents.results }}"
+  loop: "{{ zfs_mountpoint_contents.results | default([]) }}"
+  when: homelab_use_zfs | bool
   loop_control:
     label: "{{ item.item | default('') }}"
 
 - name: Collect the database datasets that need recordsize=16K
   ansible.builtin.set_fact:
     zfs_db_datasets: "{{ zfs_recordsize_16k + (homelab_stacks | map('extract', zfs_stack_recordsize_16k) | list | flatten) }}"
+  when: homelab_use_zfs | bool
 
 - name: Create missing service datasets (database datasets get recordsize=16K at creation)
   ansible.builtin.command:
     argv: "{{ ['zfs', 'create', '-p'] + (['-o', 'recordsize=16K'] if item in zfs_db_datasets else []) + [zfs_pool_name ~ '/services/' ~ item] }}"
   loop: "{{ zfs_datasets + (homelab_stacks | map('extract', zfs_stack_datasets) | list | flatten) }}"
   changed_when: true
-  when: (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
+  when:
+    - homelab_use_zfs | bool
+    - (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
 
 # Only for database datasets that existed before this run. New ones were created with recordsize=16K.
 - name: Read recordsize of existing database datasets
@@ -67,7 +80,9 @@
   register: zfs_recordsize
   changed_when: false
   check_mode: false
-  when: (zfs_pool_name ~ '/services/' ~ item) in zfs_existing.stdout_lines
+  when:
+    - homelab_use_zfs | bool
+    - (zfs_pool_name ~ '/services/' ~ item) in zfs_existing.stdout_lines
 
 - name: Set recordsize=16K on existing database datasets that differ
   ansible.builtin.command:
@@ -77,12 +92,29 @@
     label: "{{ item.item }}"
   changed_when: true
   when:
+    - homelab_use_zfs | bool
     - item.stdout is defined
     - item.stdout != '16K'
 
+# Without ZFS, the same folders are plain directories. Existing ones are left as they are.
+- name: Create the data root without ZFS
+  ansible.builtin.command:
+    argv: [mkdir, -p, "{{ homelab_data_root }}"]
+  args:
+    creates: "{{ homelab_data_root }}"
+  when: not (homelab_use_zfs | bool)
+
+- name: Create service folders without ZFS
+  ansible.builtin.command:
+    argv: [mkdir, -p, "{{ homelab_data_root }}/{{ item }}"]
+  args:
+    creates: "{{ homelab_data_root }}/{{ item }}"
+  loop: "{{ zfs_datasets + (homelab_stacks | map('extract', zfs_stack_datasets) | list | flatten) }}"
+  when: not (homelab_use_zfs | bool)
+
 - name: Give matter-server its unprivileged owner (matter stack)
   ansible.builtin.file:
-    path: "/{{ zfs_pool_name }}/services/matter-server"
+    path: "{{ homelab_data_root }}/matter-server"
     state: directory
     owner: "1000"
     group: "1000"

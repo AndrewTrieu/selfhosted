@@ -18,8 +18,10 @@ cron_jobs:
     month: "1"
     weekday: "*"
     job: >-
-      cd /tank/services/unbound && curl -fsS -o root.hints.new https://www.internic.net/domain/named.root
+      cd {{ homelab_data_root }}/unbound && curl -fsS -o root.hints.new https://www.internic.net/domain/named.root
       && mv root.hints.new root.hints && cd /opt/homelab && docker compose restart unbound
+# ZFS-only jobs, added when homelab_use_zfs is true.
+cron_zfs_jobs:
   - name: Scrub the ZFS pool monthly
     user: root
     minute: "0"

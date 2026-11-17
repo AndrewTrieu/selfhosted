@@ -6,7 +6,7 @@ services:
     environment:
       DOMAIN: "https://${VAULT_DOMAIN}"
     volumes:
-      - /tank/services/vaultwarden:/data
+      - ${HOMELAB_DATA:-/tank/services}/vaultwarden:/data
     networks:
       - proxy
 
@@ -15,12 +15,12 @@ services:
     container_name: 2fauth
     restart: always
     volumes:
-      - /tank/services/2fauth:/2fauth
+      - ${HOMELAB_DATA:-/tank/services}/2fauth:/2fauth
     environment:
       APP_NAME: 2FAuth
       APP_ENV: production
       APP_DEBUG: false
-      APP_TIMEZONE: Europe/Helsinki
+      APP_TIMEZONE: ${HOMELAB_TZ:-UTC}
       SITE_OWNER: ${EMAIL}      
       APP_KEY:  ${TWOFAUTH_APP_KEY}
       APP_URL: "https://${TWOFAUTH_DOMAIN}"
@@ -36,8 +36,8 @@ services:
     container_name: filebrowser
     restart: always
     volumes:
-      - /tank/services/filebrowser/srv:/srv
-      - /tank/services/filebrowser/data:/home/filebrowser/data
+      - ${HOMELAB_DATA:-/tank/services}/filebrowser/srv:/srv
+      - ${HOMELAB_DATA:-/tank/services}/filebrowser/data:/home/filebrowser/data
     user: "1000:1000"
     networks:
       - proxy
@@ -51,7 +51,7 @@ services:
       POSTGRES_PASSWORD: ${FORGEJO_DB_PASSWORD}
       POSTGRES_DB: forgejo
     volumes:
-      - /tank/services/forgejo/postgres:/var/lib/postgresql/data
+      - ${HOMELAB_DATA:-/tank/services}/forgejo/postgres:/var/lib/postgresql/data
     networks:
       - proxy
 
@@ -73,7 +73,7 @@ services:
       FORGEJO__server__SSH_LISTEN_PORT: 22
       FORGEJO__server__LFS_START_SERVER: true
       # Settings otherwise only chosen in the install wizard (written into app.ini on start)
-      FORGEJO__DEFAULT__APP_NAME: "Andrew's Code Forge"
+      FORGEJO__DEFAULT__APP_NAME: "${HOMELAB_FORGEJO_NAME:-Forgejo}"
       FORGEJO__server__DOMAIN: ${GIT_DOMAIN}
       FORGEJO__server__SSH_DOMAIN: ${GIT_DOMAIN}
       FORGEJO__server__ROOT_URL: "https://${GIT_DOMAIN}/"
@@ -82,7 +82,7 @@ services:
       FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES: "*"
       FORGEJO__service__DISABLE_REGISTRATION: true
     volumes:
-      - /tank/services/forgejo/data:/data
+      - ${HOMELAB_DATA:-/tank/services}/forgejo/data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     networks:
@@ -97,7 +97,7 @@ services:
       POSTGRES_USER: airtrail
       POSTGRES_PASSWORD: ${AIRTRAIL_DB_PASSWORD}
     volumes:
-      - /tank/services/airtrail/postgres:/var/lib/postgresql/data
+      - ${HOMELAB_DATA:-/tank/services}/airtrail/postgres:/var/lib/postgresql/data
     networks:
       - proxy
     healthcheck:
@@ -124,7 +124,7 @@ services:
       INTEGRATIONS_AERO_DATA_BOX_KEY: ${AIRTRAIL_AERO_DATA_BOX_KEY}
       INTEGRATIONS_OPEN_AIP_KEY: ${AIRTRAIL_OPEN_AIP_KEY}
     volumes:
-      - /tank/services/airtrail:/app/uploads
+      - ${HOMELAB_DATA:-/tank/services}/airtrail:/app/uploads
     networks:
       - proxy
 

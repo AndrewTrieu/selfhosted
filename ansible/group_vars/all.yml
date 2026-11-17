@@ -7,6 +7,12 @@ homelab_user: "{{ ansible_user }}"
 # Repo root, resolved from this playbook directory (ansible/ sits next to homelab/).
 homelab_repo_root: "{{ playbook_dir }}/.."
 
+# Where persistent service data lives. With ZFS, this must be /<pool>/services (see zfs_pool_name).
+homelab_data_root: /tank/services
+
+# Use ZFS datasets for the data root. Set false to create plain folders instead.
+homelab_use_zfs: true
+
 # Stacks to prepare: any of auth, ci, monitoring, matter. Must match COMPOSE_PROFILES in .env,
 # which is what actually starts them. Empty means the core stacks only.
 homelab_stacks: []

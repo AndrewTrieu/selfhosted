@@ -9,14 +9,14 @@ include:
     env_file: .env
   - path: stacks/admin.yml     # portainer, dozzle, 3xui
     env_file: .env
-  - path: stacks/home.yml      # homeassistant, matter-hub
-    env_file: .env
   # Optional stacks: each service has a profile, and COMPOSE_PROFILES in .env picks which start.
   - path: stacks/auth.yml       # authentik (profile: auth)
     env_file: .env
   - path: stacks/ci.yml         # forgejo-runner, docker-in-docker (profile: ci)
     env_file: .env
   - path: stacks/monitoring.yml # uptime-kuma, netdata (profile: monitoring)
+    env_file: .env
+  - path: stacks/home.yml       # homeassistant, matter-hub (profile: home)
     env_file: .env
   - path: stacks/matter.yml     # matter-server, otbr (profile: matter)
     env_file: .env
