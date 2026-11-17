@@ -1,0 +1,40 @@
+---
+# Lint and syntax checks for the repo's tooling. Runs on push and pull request.
+# Not active until the Forgejo runner (stacks/ci.yml) is deployed.
+# runs-on: "docker" is an assumed label. Confirm it against the runner's labels when enabling it.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ansible:
+    runs-on: docker
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned Ansible tooling
+        run: pip install -r ansible/requirements-dev.txt
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Syntax-check playbooks
+        working-directory: ansible
+        run: |
+          ansible-playbook --syntax-check site.yml
+          ansible-playbook --syntax-check zfs-pool.yml
+
+      - name: Lint (production profile)
+        working-directory: ansible
+        run: ansible-lint

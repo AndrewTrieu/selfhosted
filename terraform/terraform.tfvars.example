@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (gitignored). The API token goes in TF_VAR_cloudflare_api_token, not here.
+zone_id = "REPLACE_ZONE_ID"
+domain  = "REPLACE_DOMAIN"
