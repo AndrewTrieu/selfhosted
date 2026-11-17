@@ -1,0 +1,24 @@
+---
+# This server runs Docker from Docker's own apt repo (docker-ce with containerd.io). Ubuntu's
+# docker.io conflicts with that, so install only when Docker or Compose is missing.
+
+- name: Check whether Docker and Compose are already installed
+  ansible.builtin.command:
+    argv: [docker, compose, version]
+  register: docker_compose_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install Docker and the Compose v2 plugin (only when missing)
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: true
+  when: docker_compose_check.rc != 0
+
+- name: Start Docker and enable it on boot
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true

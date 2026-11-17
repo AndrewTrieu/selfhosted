@@ -1,0 +1,4 @@
+---
+host_dns_resolved_conf: /etc/systemd/resolved.conf.d/adguardhome.conf
+host_dns_resolv_conf: /etc/resolv.conf
+host_dns_resolv_backup: /etc/resolv.conf.backup

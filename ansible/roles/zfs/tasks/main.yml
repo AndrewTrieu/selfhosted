@@ -1,0 +1,82 @@
+---
+- name: Install ZFS and auto-snapshot packages
+  ansible.builtin.apt:
+    name: "{{ zfs_packages }}"
+    state: present
+    update_cache: true
+
+- name: Check that the pool exists
+  ansible.builtin.command:
+    argv: [zpool, list, -H, -o, name, "{{ zfs_pool_name }}"]
+  register: zfs_pool_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Stop unless the pool exists (create it with zfs-pool.yml)
+  ansible.builtin.assert:
+    that:
+      - zfs_pool_check.rc == 0
+    fail_msg: "Pool {{ zfs_pool_name }} not found. Create it with zfs-pool.yml first."
+
+- name: List existing service datasets
+  ansible.builtin.command:
+    argv: [zfs, list, -H, -o, name, -r, "{{ zfs_pool_name }}/services"]
+  register: zfs_existing
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Look for existing data under the mountpoints of missing datasets
+  ansible.builtin.find:
+    paths: "/{{ zfs_pool_name }}/services/{{ item }}"
+    hidden: true
+    file_type: any
+  loop: "{{ zfs_datasets + (zfs_optional_datasets if homelab_optional_stacks | bool else []) }}"
+  register: zfs_mountpoint_contents
+  when: (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
+  loop_control:
+    label: "{{ item }}"
+
+# A new dataset mounts over its directory and hides whatever was there. Stop instead of hiding data.
+- name: Refuse to create a dataset over a directory that already has data
+  ansible.builtin.assert:
+    that:
+      - item.skipped | default(false) or item.matched == 0
+    fail_msg: "Mountpoint for a missing dataset already contains files. Move or remove them first."
+  loop: "{{ zfs_mountpoint_contents.results }}"
+  loop_control:
+    label: "{{ item.item | default('') }}"
+
+- name: Create missing service datasets
+  ansible.builtin.command:
+    argv: [zfs, create, -p, "{{ zfs_pool_name }}/services/{{ item }}"]
+  loop: "{{ zfs_datasets + (zfs_optional_datasets if homelab_optional_stacks | bool else []) }}"
+  changed_when: true
+  when: (zfs_pool_name ~ '/services/' ~ item) not in zfs_existing.stdout_lines
+
+- name: Read recordsize of database datasets
+  ansible.builtin.command:
+    argv: [zfs, get, -H, -o, value, recordsize, "{{ zfs_pool_name }}/services/{{ item }}"]
+  loop: "{{ zfs_recordsize_16k + (zfs_optional_recordsize_16k if homelab_optional_stacks | bool else []) }}"
+  register: zfs_recordsize
+  changed_when: false
+  check_mode: false
+
+- name: Set recordsize=16K on database datasets
+  ansible.builtin.command:
+    argv: [zfs, set, recordsize=16K, "{{ zfs_pool_name }}/services/{{ item.item }}"]
+  loop: "{{ zfs_recordsize.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  changed_when: true
+  when: item.stdout != '16K'
+
+- name: Give matter-server its unprivileged owner (optional stacks)
+  ansible.builtin.file:
+    path: "/{{ zfs_pool_name }}/services/matter-server"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0755"
+  when: homelab_optional_stacks | bool

@@ -1,0 +1,59 @@
+---
+# DESTRUCTIVE PATH. Only reached through zfs-pool.yml with -e zfs_pool_create=true.
+
+- name: Validate the disk layout
+  ansible.builtin.assert:
+    that:
+      - zfs_pool_disks | length == 4
+      - zfs_pool_disks | select('search', 'REPLACE') | list | length == 0
+      - zfs_pool_disks | select('match', '^/dev/disk/by-id/') | list | length == 4
+    fail_msg: "zfs_pool_disks needs four real /dev/disk/by-id paths (no REPLACE placeholders)."
+
+- name: Check whether the pool already exists
+  ansible.builtin.command:
+    argv: [zpool, list, -H, -o, name, "{{ zfs_pool_name }}"]
+  register: zfs_pool_exists
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Report and skip when the pool exists (this role never re-creates a pool)
+  ansible.builtin.debug:
+    msg: "Pool {{ zfs_pool_name }} already exists; nothing to do."
+  when: zfs_pool_exists.rc == 0
+
+- name: Create the pool (two mirrored vdevs, same options as README step 2)
+  ansible.builtin.command:
+    argv:
+      - zpool
+      - create
+      - -f
+      - -o
+      - ashift=12
+      - -O
+      - compression=lz4
+      - -O
+      - atime=off
+      - -O
+      - xattr=sa
+      - -O
+      - acltype=posixacl
+      - -O
+      - dnodesize=auto
+      - -O
+      - "mountpoint=/{{ zfs_pool_name }}"
+      - "{{ zfs_pool_name }}"
+      - mirror
+      - "{{ zfs_pool_disks[0] }}"
+      - "{{ zfs_pool_disks[1] }}"
+      - mirror
+      - "{{ zfs_pool_disks[2] }}"
+      - "{{ zfs_pool_disks[3] }}"
+  changed_when: true
+  when: zfs_pool_exists.rc != 0
+
+- name: Enable SSD trim on the pool
+  ansible.builtin.command:
+    argv: [zpool, set, autotrim=on, "{{ zfs_pool_name }}"]
+  changed_when: true
+  when: zfs_pool_exists.rc != 0

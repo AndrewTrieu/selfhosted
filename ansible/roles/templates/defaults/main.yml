@@ -1,0 +1,30 @@
+---
+# Config templates copied once from homelab/services/ into /tank/services/ (README step 4.2).
+# force: false means a copy never overwrites a file on the server. Server files hold real
+# secrets and runtime state (the AdGuard login hash, the HA .storage/http trust settings).
+homelab_template_dirs:
+  - /tank/services/adguard/conf
+  - /tank/services/caddy
+  - /tank/services/crowdsec/acquis.d
+  - /tank/services/filebrowser/data
+  - /tank/services/homeassistant/config/.storage
+  - /tank/services/unbound/custom.conf.d
+  - /tank/services/unbound
+  - /tank/services/site
+
+homelab_template_files:
+  - { src: adguard/conf/AdGuardHome.yaml, dest: /tank/services/adguard/conf/AdGuardHome.yaml }
+  - { src: caddy/Dockerfile, dest: /tank/services/caddy/Dockerfile }
+  - { src: crowdsec/acquis.d/caddy.yaml, dest: /tank/services/crowdsec/acquis.d/caddy.yaml }
+  - { src: filebrowser/data/config.yaml, dest: /tank/services/filebrowser/data/config.yaml }
+  - { src: homeassistant/config/.storage/http, dest: /tank/services/homeassistant/config/.storage/http }
+  - { src: unbound/custom.conf.d/cachedb.conf, dest: /tank/services/unbound/custom.conf.d/cachedb.conf }
+  - { src: unbound/root.hints, dest: /tank/services/unbound/root.hints }
+
+# Optional stacks (README "Optional, for ci.yml").
+homelab_optional_template_dirs:
+  - /tank/services/forgejo/runner/data
+homelab_optional_template_files:
+  - { src: forgejo/runner/data/config.yaml, dest: /tank/services/forgejo/runner/data/config.yaml }
+
+adguard_config_path: /tank/services/adguard/conf/AdGuardHome.yaml

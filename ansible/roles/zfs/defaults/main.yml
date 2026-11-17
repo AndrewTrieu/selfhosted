@@ -1,0 +1,47 @@
+---
+zfs_pool_name: tank
+zfs_packages:
+  - zfsutils-linux
+  - zfs-auto-snapshot
+
+# Base datasets from README "Create one dataset per stateful service". Parents are created with -p.
+zfs_datasets:
+  - 2fauth
+  - 3x-ui
+  - adguard
+  - airtrail
+  - airtrail/postgres
+  - caddy
+  - crowdsec
+  - dozzle
+  - filebrowser
+  - filebrowser/srv
+  - forgejo
+  - forgejo/postgres
+  - homeassistant
+  - matter-hub
+  - portainer
+  - unbound
+  - unbound/redis
+  - vaultwarden
+  - wg-easy
+
+# README "Optional stacks".
+zfs_optional_datasets:
+  - authentik
+  - authentik/postgres
+  - authentik/redis
+  - forgejo/runner
+  - netdata
+  - uptimekuma
+  - matter-server
+  - otbr
+
+# Database datasets need recordsize=16K (README step 4).
+zfs_recordsize_16k:
+  - forgejo/postgres
+  - airtrail/postgres
+  - unbound/redis
+zfs_optional_recordsize_16k:
+  - authentik/postgres
+  - authentik/redis

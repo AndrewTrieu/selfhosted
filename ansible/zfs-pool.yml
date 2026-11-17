@@ -1,0 +1,16 @@
+---
+# DESTRUCTIVE. Creates the tank pool from zfs_pool_disks. Never run as part of site.yml.
+# Refuses to run unless you pass -e zfs_pool_create=true. The role skips the create when the
+# pool already exists; it never destroys or re-creates a pool.
+# Run with: ansible-playbook zfs-pool.yml -e zfs_pool_create=true --check --diff   (review first)
+- name: Create the ZFS pool (destructive, explicit opt-in)
+  hosts: homelab
+  become: true
+  pre_tasks:
+    - name: Require explicit opt-in
+      ansible.builtin.assert:
+        that:
+          - zfs_pool_create | default(false) | bool
+        fail_msg: "Pass -e zfs_pool_create=true to run this playbook."
+  roles:
+    - role: zfs_pool

@@ -1,0 +1,43 @@
+---
+# Frees port 53 for AdGuard (README step 3). Without this, AdGuard fails to bind.
+
+- name: Ensure the resolved drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ host_dns_resolved_conf | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Write the systemd-resolved drop-in
+  ansible.builtin.copy:
+    dest: "{{ host_dns_resolved_conf }}"
+    mode: "0644"
+    content: |
+      [Resolve]
+      DNS=127.0.0.1
+      DNSStubListener=no
+  notify: Restart systemd-resolved
+
+- name: Check the current resolv.conf and any existing backup
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ host_dns_resolv_conf }}"
+    - "{{ host_dns_resolv_backup }}"
+  register: host_dns_stat
+
+# Moving a live resolv.conf is risky, so only do it when it is a plain file and no backup exists.
+- name: Back up resolv.conf before linking it to systemd-resolved
+  ansible.builtin.command:
+    argv: [mv, "{{ host_dns_resolv_conf }}", "{{ host_dns_resolv_backup }}"]
+  when:
+    - host_dns_stat.results[0].stat.exists
+    - not host_dns_stat.results[0].stat.islnk
+    - not host_dns_stat.results[1].stat.exists
+  changed_when: true
+
+- name: Link resolv.conf to the systemd-resolved stub
+  ansible.builtin.file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: "{{ host_dns_resolv_conf }}"
+    state: link
+    force: true

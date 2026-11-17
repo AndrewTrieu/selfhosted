@@ -1,0 +1,30 @@
+---
+# Mirrors README "Scheduled jobs". The DDNS script is NOT deployed by Ansible: the server copy holds
+# the real Cloudflare token, and the repo copy holds placeholders. Installing it would overwrite the token.
+cron_jobs:
+  - name: Cloudflare DDNS every 5 minutes
+    user: "{{ homelab_user }}"
+    minute: "*/5"
+    hour: "*"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    job: "/opt/homelab/cloudflare/cloudflare_ddns.sh >/dev/null 2>&1"
+  - name: Refresh Unbound root hints yearly
+    user: "{{ homelab_user }}"
+    minute: "0"
+    hour: "3"
+    day: "1"
+    month: "1"
+    weekday: "*"
+    job: >-
+      cd /tank/services/unbound && curl -fsS -o root.hints.new https://www.internic.net/domain/named.root
+      && mv root.hints.new root.hints && cd /opt/homelab && docker compose restart unbound
+  - name: Scrub the ZFS pool monthly
+    user: root
+    minute: "0"
+    hour: "3"
+    day: "1"
+    month: "*"
+    weekday: "*"
+    job: "/sbin/zpool scrub tank"

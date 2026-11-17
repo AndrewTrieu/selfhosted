@@ -1,0 +1,32 @@
+---
+# No mode here: existing directories keep their permissions (filebrowser/data is 0775 on the server).
+- name: Create template directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+  loop: "{{ homelab_template_dirs + (homelab_optional_template_dirs if homelab_optional_stacks | bool else []) }}"
+
+- name: Copy config templates (never overwrites an existing server file)
+  ansible.builtin.copy:
+    src: "{{ homelab_repo_root }}/homelab/services/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    force: false
+    mode: "0644"
+  loop: "{{ homelab_template_files + (homelab_optional_template_files if homelab_optional_stacks | bool else []) }}"
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Check whether the AdGuard login placeholder is still present
+  ansible.builtin.command:
+    argv: [grep, -q, REPLACE_WITH_BCRYPT_HASH, "{{ adguard_config_path }}"]
+  register: adguard_placeholder
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Warn when the AdGuard password hash has not been set
+  ansible.builtin.debug:
+    msg: >-
+      {{ adguard_config_path }} still has REPLACE_WITH_BCRYPT_HASH. Set it by hand (README step 4.3);
+      this role does not write passwords.
+  when: adguard_placeholder.rc == 0

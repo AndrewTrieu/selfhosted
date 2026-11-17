@@ -1,0 +1,4 @@
+# Lint and syntax-check tooling. Matches the versions in ghcr.io/ansible/community-ansible-dev-tools
+# used for the scaffold's lint run.
+ansible-core==2.22.0
+ansible-lint==26.11.0

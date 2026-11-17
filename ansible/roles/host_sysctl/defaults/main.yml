@@ -1,0 +1,8 @@
+---
+# Thread/Matter IPv6 settings (README "Host IPv6 settings"). Applied only with the optional stacks.
+host_sysctl_file: /etc/sysctl.d/60-thread.conf
+host_sysctl_settings:
+  - name: "net.ipv6.conf.{{ homelab_lan_interface }}.accept_ra"
+    value: "2"
+  - name: "net.ipv6.conf.{{ homelab_lan_interface }}.accept_ra_rt_info_max_plen"
+    value: "64"

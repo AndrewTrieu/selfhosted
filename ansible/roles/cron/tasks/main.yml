@@ -1,0 +1,21 @@
+---
+- name: Install cron and curl (used by the root-hints job)
+  ansible.builtin.apt:
+    name: [cron, curl]
+    state: present
+    update_cache: true
+
+- name: Install homelab cron jobs
+  ansible.builtin.cron:
+    name: "{{ item.name }}"
+    user: "{{ item.user }}"
+    minute: "{{ item.minute }}"
+    hour: "{{ item.hour }}"
+    day: "{{ item.day }}"
+    month: "{{ item.month }}"
+    weekday: "{{ item.weekday }}"
+    job: "{{ item.job }}"
+    state: present
+  loop: "{{ cron_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"

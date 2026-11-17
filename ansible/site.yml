@@ -1,0 +1,14 @@
+---
+# Idempotent host bootstrap (README "Setup on a fresh server", step 3-4, and "Scheduled jobs").
+# Does not create or destroy ZFS pools; see zfs-pool.yml for that.
+# Run with: ansible-playbook site.yml --check --diff
+- name: Bootstrap the homelab host
+  hosts: homelab
+  become: true
+  roles:
+    - { role: host_dns, tags: [host_dns] }
+    - { role: host_sysctl, tags: [host_sysctl] }
+    - { role: docker, tags: [docker] }
+    - { role: zfs, tags: [zfs] }
+    - { role: templates, tags: [templates] }
+    - { role: cron, tags: [cron] }

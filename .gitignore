@@ -1,1 +1,3 @@
 homelab/.env
+ansible/.vault_pass*
+ansible/*.retry

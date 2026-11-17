@@ -1,0 +1,6 @@
+---
+# Used only when Docker is missing. The current server runs Docker's upstream docker-ce packages,
+# which conflict with these, so the role never replaces an existing install.
+docker_packages:
+  - docker.io
+  - docker-compose-v2

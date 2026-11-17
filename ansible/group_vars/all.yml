@@ -1,0 +1,22 @@
+---
+# Non-secret settings shared by every play. Secrets go in ansible-vault, never here.
+
+# Login user that owns the homelab crontab entries (the README uses the server login user).
+homelab_user: "{{ ansible_user }}"
+
+# Repo root, resolved from this playbook directory (ansible/ sits next to homelab/).
+homelab_repo_root: "{{ playbook_dir }}/.."
+
+# Set true to also manage the optional stacks (matter.yml and friends).
+homelab_optional_stacks: false
+
+# LAN interface name. Must match stacks/matter.yml and stacks/home.yml.
+homelab_lan_interface: enp5s0
+
+# Pool layout for the zfs_pool role: two mirrors of four disks. Use stable /dev/disk/by-id paths.
+# Placeholders fail the assert in roles/zfs_pool.
+zfs_pool_disks:
+  - /dev/disk/by-id/REPLACE_DISK_A
+  - /dev/disk/by-id/REPLACE_DISK_B
+  - /dev/disk/by-id/REPLACE_DISK_C
+  - /dev/disk/by-id/REPLACE_DISK_D

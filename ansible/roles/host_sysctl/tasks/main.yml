@@ -1,0 +1,11 @@
+---
+- name: Apply Thread/Matter IPv6 sysctls
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: "{{ host_sysctl_file }}"
+    sysctl_set: true
+    reload: true
+    state: present
+  loop: "{{ host_sysctl_settings }}"
+  when: homelab_optional_stacks | bool
